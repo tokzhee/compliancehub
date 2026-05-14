@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import apiClient from '../lib/apiClient';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import apiClient, { tokenStorage } from '../api/apiClient';
 import { useToast } from './ToastContext';
 
 const AuthContext = createContext({})
@@ -12,6 +12,37 @@ export const useAuth = () => {
   return context
 }
 
+const normalizeProfile = (raw, fallbackUserId) => {
+  if (!raw) return null;
+  const permissionList = raw?.permissionList || raw?.permission_list || '';
+  const permissions =
+    typeof permissionList === 'string' && permissionList?.length > 0 ? permissionList?.split(',')?.map((p) => p?.trim())?.filter(Boolean)
+      : Array.isArray(permissionList)
+      ? permissionList
+      : [];
+
+  return {
+    ...raw,
+    id: raw?.userId || raw?.id || fallbackUserId,
+    userId: raw?.userId || raw?.id || fallbackUserId,
+    fullName: raw?.fullName || raw?.full_name || '',
+    full_name: raw?.full_name || raw?.fullName || '',
+    email: raw?.email || '',
+    username: raw?.username || '',
+    organizationId: raw?.organizationId || raw?.organization_id || '',
+    organization_id: raw?.organization_id || raw?.organizationId || '',
+    organizationName: raw?.organizationName || raw?.organization_name || '',
+    organizationCode: raw?.organizationCode || raw?.organization_code || '',
+    roleId: raw?.roleId || raw?.role_id || '',
+    role_id: raw?.role_id || raw?.roleId || '',
+    roleName: raw?.roleName || raw?.role_name || '',
+    roleDescription: raw?.roleDescription || raw?.role_description || '',
+    permissions,
+    permissionList: raw?.permissionList || raw?.permission_list || '',
+    isActive: raw?.isActive ?? raw?.is_active ?? true,
+  };
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
@@ -20,157 +51,111 @@ export const AuthProvider = ({ children }) => {
   const [authMethod, setAuthMethod] = useState(null)
   const toast = useToast();
 
-  const loadProfileFromApi = async (userId, signal) => {
+  // ─── Load profile from API ────────────────────────────────────────────────
+  const loadProfileFromApi = useCallback(async (userId, signal) => {
     if (!userId) return;
     setProfileLoading(true);
     try {
       const response = await apiClient?.get('/api/auth/profile', {
         params: { userId },
-        ...(signal ? { signal } : {})
+        ...(signal ? { signal } : {}),
       });
       const data = response?.data;
+      if (!data) return;
 
-      if (data) {
-        // API returns an array — always use index 0
-        const raw = Array.isArray(data) ? data?.[0] : (data?.data || data?.user || data?.profile || data?.result || data?.payload || data);
+      const raw = Array.isArray(data)
+        ? data?.[0]
+        : data?.data || data?.user || data?.profile || data?.result || data?.payload || data;
 
-        if (!raw) {
-          console.warn('AuthContext [loadProfileFromApi]: Could not extract profile object from response');
-          toast?.warning?.('User profile data could not be loaded. Some features may be limited.');
-          return;
-        }
-
-        // Parse permissionList comma-separated string into array
-        const permissionList = raw?.permissionList || raw?.permission_list || '';
-        const permissions = typeof permissionList === 'string' && permissionList?.length > 0 ? permissionList?.split(',')?.map(p => p?.trim())?.filter(Boolean)
-          : (Array.isArray(permissionList) ? permissionList : []);
-
-        const normalized = {
-          // Spread raw fields so nothing is lost
-          ...raw,
-          // Canonical id field
-          id: raw?.userId || raw?.id || userId,
-          userId: raw?.userId || raw?.id || userId,
-          // Name fields
-          fullName: raw?.fullName || raw?.full_name || '',
-          full_name: raw?.full_name || raw?.fullName || '',
-          // Email
-          email: raw?.email || '',
-          // Username
-          username: raw?.username || '',
-          // Organization
-          organizationId: raw?.organizationId || raw?.organization_id || '',
-          organization_id: raw?.organization_id || raw?.organizationId || '',
-          organizationName: raw?.organizationName || raw?.organization_name || '',
-          organizationCode: raw?.organizationCode || raw?.organization_code || '',
-          // Role
-          roleId: raw?.roleId || raw?.role_id || '',
-          role_id: raw?.role_id || raw?.roleId || '',
-          roleName: raw?.roleName || raw?.role_name || '',
-          roleDescription: raw?.roleDescription || raw?.role_description || '',
-          // Permissions
-          permissions,
-          permissionList: raw?.permissionList || raw?.permission_list || '',
-          // Status
-          isActive: raw?.isActive ?? raw?.is_active ?? true,
-        };
-
-        setUserProfile(normalized);
+      if (!raw) {
+        console.warn('AuthContext: Could not extract profile from response');
+        toast?.warning?.('User profile data could not be loaded. Some features may be limited.');
+        return;
       }
+
+      setUserProfile(normalizeProfile(raw, userId));
     } catch (error) {
       if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
-      console.error('AuthContext: REST profile load error:', error?.message);
+      console.error('AuthContext: Profile load error:', error?.message);
       toast?.error?.('Failed to load user profile. Please refresh or log in again.');
     } finally {
       setProfileLoading(false);
     }
-  };
+  }, [toast]);
 
-  const restoreApiSession = async () => {
-    const token = localStorage.getItem('access_token');
-    const refreshToken = localStorage.getItem('refresh_token');
-    const storedUserId = localStorage.getItem('user_id');
-
-    if (!token || !storedUserId) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await apiClient?.get('/api/auth/session', {
-        params: { userId: storedUserId, refreshToken }
-      });
-      const sessionData = response?.data;
-      if (sessionData) {
-        const userData = {
-          id: sessionData?.userId || storedUserId,
-          email: sessionData?.email,
-          name: sessionData?.fullName,
-        };
-        setUser(userData);
-        setAuthMethod('api');
-        await loadProfileFromApi(userData?.id);
-      }
-    } catch (error) {
-      console.error('AuthContext: Session restore error:', error?.message);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user_id');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ─── Session restoration on mount ────────────────────────────────────────
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
 
-    const restoreApiSessionSafe = async () => {
-      const token = localStorage.getItem('access_token');
-      const refreshToken = localStorage.getItem('refresh_token');
-      const storedUserId = localStorage.getItem('user_id');
+    const restoreSession = async () => {
+      const token = tokenStorage?.getAccessToken();
+      const storedUserId = tokenStorage?.getUserId();
 
+      // No stored credentials — nothing to restore
       if (!token || !storedUserId) {
         if (isMounted) setLoading(false);
         return;
       }
 
       try {
-        const response = await apiClient?.get('/api/auth/session', {
-          params: { userId: storedUserId, refreshToken },
-          signal: controller?.signal
+        // Validate the stored token by fetching the profile directly.
+        // If the token is expired the apiClient interceptor will attempt
+        // a refresh automatically before this call fails.
+        const response = await apiClient?.get('/api/auth/profile', {
+          params: { userId: storedUserId },
+          signal: controller?.signal,
         });
+
         if (!isMounted) return;
-        const sessionData = response?.data;
-        if (sessionData) {
-          const userData = {
-            id: sessionData?.userId || storedUserId,
-            email: sessionData?.email,
-            name: sessionData?.fullName,
-          };
-          setUser(userData);
+
+        const data = response?.data;
+        const raw = Array.isArray(data)
+          ? data?.[0]
+          : data?.data || data?.user || data?.profile || data?.result || data?.payload || data;
+
+        if (raw) {
+          const profile = normalizeProfile(raw, storedUserId);
+          setUser({
+            id: profile?.id,
+            email: profile?.email,
+            name: profile?.fullName,
+          });
+          setUserProfile(profile);
           setAuthMethod('api');
-          await loadProfileFromApi(userData?.id, controller?.signal);
+        } else {
+          // Profile fetch succeeded but returned empty — clear stale tokens
+          tokenStorage?.clearTokens();
         }
       } catch (error) {
         if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
-        console.error('AuthContext: Session restore error:', error?.message);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_id');
+        // Token invalid / refresh failed — clear storage so user sees login
+        console.warn('AuthContext: Session restore failed, clearing tokens:', error?.message);
+        tokenStorage?.clearTokens();
       } finally {
         if (isMounted) setLoading(false);
       }
     };
 
-    restoreApiSessionSafe();
+    restoreSession();
+
+    // Listen for forced logout events dispatched by the apiClient interceptor
+    const handleForceLogout = () => {
+      if (!isMounted) return;
+      setUser(null);
+      setUserProfile(null);
+      setAuthMethod(null);
+    };
+    window.addEventListener('auth:logout', handleForceLogout);
 
     return () => {
       isMounted = false;
       controller?.abort();
+      window.removeEventListener('auth:logout', handleForceLogout);
     };
   }, []);
 
+  // ─── Sign in ──────────────────────────────────────────────────────────────
   const signIn = async (username, password) => {
     try {
       const response = await apiClient?.post('/api/auth/login', { username, password });
@@ -183,24 +168,20 @@ export const AuthProvider = ({ children }) => {
       if (!userId && accessToken) {
         try {
           const payload = JSON.parse(atob(accessToken?.split('.')?.[1]));
-          userId = payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
-            || payload?.sub
-            || payload?.userId
-            || payload?.user_id;
+          userId =
+            payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
+            payload?.sub ||
+            payload?.userId ||
+            payload?.user_id;
         } catch (e) {
           console.error('AuthContext: Failed to decode JWT payload:', e?.message);
         }
       }
 
-      if (accessToken) {
-        localStorage.setItem('access_token', accessToken);
-      }
-      if (refreshToken) {
-        localStorage.setItem('refresh_token', refreshToken);
-      }
-      if (userId) {
-        localStorage.setItem('user_id', userId);
-      }
+      // Persist tokens
+      if (accessToken) localStorage.setItem('access_token', accessToken);
+      if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+      if (userId) localStorage.setItem('user_id', userId);
 
       const userData = {
         id: userId,
@@ -217,21 +198,21 @@ export const AuthProvider = ({ children }) => {
 
       return { data, error: null };
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || 'Login failed. Please try again.';
+      const message =
+        error?.response?.data?.message || error?.message || 'Login failed. Please try again.';
       return { data: null, error: { message } };
     }
   };
 
+  // ─── Sign out ─────────────────────────────────────────────────────────────
   const signOut = async () => {
     try {
       try {
         await apiClient?.post('/api/auth/logout');
-      } catch (e) {
-        // Ignore logout API errors - clear local state regardless
+      } catch {
+        // Ignore logout API errors — always clear local state
       }
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user_id');
+      tokenStorage?.clearTokens();
       setUser(null);
       setAuthMethod(null);
       setUserProfile(null);
@@ -242,6 +223,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ─── Update profile ───────────────────────────────────────────────────────
   const updateProfile = async (updates) => {
     if (!user) return { error: { message: 'No user logged in' } };
     try {
@@ -250,7 +232,8 @@ export const AuthProvider = ({ children }) => {
       setUserProfile(data);
       return { data, error: null };
     } catch (error) {
-      return { error: { message: 'Network error. Please try again.' } };
+      const message = error?.response?.data?.message || error?.message || 'Profile update failed.';
+      return { data: null, error: { message } };
     }
   };
 
@@ -259,17 +242,15 @@ export const AuthProvider = ({ children }) => {
     userProfile,
     loading,
     profileLoading,
+    authMethod,
     signIn,
     signOut,
     updateProfile,
+    loadProfileFromApi,
     isAuthenticated: !!user,
-    authMethod,
-    useRestApi: true,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export default AuthContext;

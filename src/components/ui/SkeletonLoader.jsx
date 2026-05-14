@@ -203,3 +203,16 @@ const GridSkeleton = () => {
 };
 
 export { GridSkeleton };
+const SkeletonLoader = () => {
+  React.useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.warn('Placeholder: SkeletonLoader is not implemented yet.');
+  }, []);
+  return (
+    <div>
+      {/* SkeletonLoader placeholder */}
+    </div>
+  );
+};
+
+export { SkeletonLoader };
