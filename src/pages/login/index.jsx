@@ -433,7 +433,12 @@ const Login = () => {
             storedUserId,
             null,
             'login',
-            `User logged in via ${authMethod === 'azure_ad' ? 'Azure AD' : 'username/password'}`
+            `User logged in via ${authMethod === 'azure_ad' ? 'Azure AD' : 'username/password'}`,
+            {
+              authMethod: authMethod === 'azure_ad' ? 'azure_ad' : 'username_password',
+              username: formData?.username || null,
+              loginTimestamp: new Date()?.toISOString()
+            }
           );
         }
       } catch {

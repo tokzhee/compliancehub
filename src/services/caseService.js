@@ -52,9 +52,7 @@ export const caseService = {
   async getCaseDetails(caseId) {
     if (useRestApi) {
       try {
-        const response = await apiClient?.get(`/api/enrichment/cases/${caseId}/details`, {
-          params: { caseId }
-        });
+        const response = await apiClient?.get(`/api/enrichment/cases/${caseId}/details`);
         return response?.data || null;
       } catch (error) {
         console.error('Error fetching case details:', error?.message);

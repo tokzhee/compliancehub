@@ -107,7 +107,14 @@ const SegmentGiinManagement = () => {
         user?.userId,
         user?.organizationId,
         'segment_giin_created',
-        'segment_giin_management'
+        'segment_giin_management',
+        {
+          newConfigId: data?.id || null,
+          segmentName: configData?.segmentName,
+          giin: configData?.giin,
+          entityName: configData?.entityName,
+          contactPerson: configData?.contactPerson
+        }
       );
       showToast('Segment GIIN configuration created successfully', 'success');
       await fetchConfigurations();
@@ -132,11 +139,19 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      const existingConfig = configurations?.find(c => c?.id === configId);
       await logActivity(
         user?.userId,
         user?.organizationId,
         'segment_giin_updated',
-        'segment_giin_management'
+        'segment_giin_management',
+        {
+          configId,
+          segmentName: updates?.segmentName || existingConfig?.segmentName,
+          giin: updates?.giin || existingConfig?.giin,
+          entityName: updates?.entityName || existingConfig?.entityName,
+          changedFields: Object.keys(updates)
+        }
       );
       showToast('Segment GIIN configuration updated successfully', 'success');
       await fetchConfigurations();
@@ -153,6 +168,7 @@ const SegmentGiinManagement = () => {
       return;
     }
 
+    const configToDelete = configurations?.find(c => c?.id === configId);
     try {
       const { error } = await segmentGiinService?.deleteSegmentGiinConfiguration(configId);
 
@@ -165,7 +181,13 @@ const SegmentGiinManagement = () => {
         user?.userId,
         user?.organizationId,
         'segment_giin_deleted',
-        'segment_giin_management'
+        'segment_giin_management',
+        {
+          deletedConfigId: configId,
+          segmentName: configToDelete?.segmentName || null,
+          giin: configToDelete?.giin || null,
+          entityName: configToDelete?.entityName || null
+        }
       );
       showToast('Segment GIIN configuration deleted successfully', 'success');
       await fetchConfigurations();
@@ -176,6 +198,7 @@ const SegmentGiinManagement = () => {
   };
 
   const handleSubmitForApproval = async (configId) => {
+    const configToSubmit = configurations?.find(c => c?.id === configId);
     try {
       const { error } = await segmentGiinService?.submitForApproval(configId);
 
@@ -188,7 +211,14 @@ const SegmentGiinManagement = () => {
         user?.userId,
         user?.organizationId,
         'segment_giin_submitted_for_approval',
-        'segment_giin_management'
+        'segment_giin_management',
+        {
+          configId,
+          segmentName: configToSubmit?.segmentName || null,
+          giin: configToSubmit?.giin || null,
+          entityName: configToSubmit?.entityName || null,
+          previousApprovalStatus: configToSubmit?.approvalStatus || 'draft'
+        }
       );
       showToast('Configuration submitted for approval successfully', 'success');
       await fetchConfigurations();
@@ -231,7 +261,15 @@ const SegmentGiinManagement = () => {
         user?.userId,
         user?.organizationId,
         'segment_giin_approved',
-        'segment_giin_management'
+        'segment_giin_management',
+        {
+          configId,
+          segmentName: selectedConfig?.segmentName || null,
+          giin: selectedConfig?.giin || null,
+          entityName: selectedConfig?.entityName || null,
+          approverUserId: user?.userId,
+          approvalComments: comments || null
+        }
       );
       showToast('Configuration approved successfully', 'success');
       await fetchConfigurations();
@@ -267,7 +305,15 @@ const SegmentGiinManagement = () => {
         user?.userId,
         user?.organizationId,
         'segment_giin_rejected',
-        'segment_giin_management'
+        'segment_giin_management',
+        {
+          configId,
+          segmentName: selectedConfig?.segmentName || null,
+          giin: selectedConfig?.giin || null,
+          entityName: selectedConfig?.entityName || null,
+          rejectorUserId: user?.userId,
+          rejectionComments: comments || null
+        }
       );
       showToast('Configuration rejected successfully', 'success');
       await fetchConfigurations();

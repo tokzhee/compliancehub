@@ -86,7 +86,14 @@ const AdConfiguration = () => {
         user?.userId,
         user?.organizationId,
         'ad_config_created',
-        'ad_configuration'
+        'ad_configuration',
+        {
+          newConfigId: data?.id || null,
+          configName: configData?.configName,
+          tenantId: configData?.tenantId || null,
+          serverUrl: configData?.serverUrl || null,
+          authType: configData?.authType || null
+        }
       );
       await fetchAdConfigurations();
       setIsCreateModalOpen(false);
@@ -110,11 +117,20 @@ const AdConfiguration = () => {
         return;
       }
 
+      const existingConfig = adConfigs?.find(c => c?.id === configId);
       await logActivity(
         user?.userId,
         user?.organizationId,
         'ad_config_updated',
-        'ad_configuration'
+        'ad_configuration',
+        {
+          configId,
+          configName: updates?.configName || existingConfig?.configName,
+          tenantId: updates?.tenantId || existingConfig?.tenantId || null,
+          changedFields: Object.keys(updates),
+          previousStatus: existingConfig?.status || null,
+          newStatus: updates?.status || existingConfig?.status || null
+        }
       );
       await fetchAdConfigurations();
       setIsEditModalOpen(false);
@@ -130,6 +146,7 @@ const AdConfiguration = () => {
       return;
     }
 
+    const configToDelete = adConfigs?.find(c => c?.id === configId);
     try {
       const { error } = await adConfigService?.deleteAdConfiguration(configId);
 
@@ -142,7 +159,13 @@ const AdConfiguration = () => {
         user?.userId,
         user?.organizationId,
         'ad_config_deleted',
-        'ad_configuration'
+        'ad_configuration',
+        {
+          deletedConfigId: configId,
+          configName: configToDelete?.configName || null,
+          tenantId: configToDelete?.tenantId || null,
+          previousStatus: configToDelete?.status || null
+        }
       );
       await fetchAdConfigurations();
     } catch (err) {

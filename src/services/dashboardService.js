@@ -59,7 +59,16 @@ export const dashboardService = {
         const response = await apiClient?.get('/api/dashboard/admin-metrics', {
           params: { organizationId }
         });
-        return response?.data || {};
+        const data = Array.isArray(response?.data) ? response?.data?.[0] : response?.data;
+        if (data) {
+          return {
+            ...data,
+            activeSessions: data?.activeUsers ?? 0,
+            recentActivity: data?.activitiesLast7Days ?? data?.totalActivities ?? 0,
+            ldapConfigs: data?.activeADConfigs ?? 0
+          };
+        }
+        return {};
       } catch (error) {
         console.warn('REST API unavailable for admin metrics, falling back to Supabase:', error?.message);
       }

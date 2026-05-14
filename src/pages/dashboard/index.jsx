@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonCard } from '../../components/ui/SkeletonLoader';
 import { useToast } from '../../contexts/ToastContext';
+import { logActivity } from '../../services/activityService';
 
 const Dashboard = () => {
   const { isSidebarExpanded } = useNavigationContext();
@@ -84,6 +85,22 @@ const Dashboard = () => {
           })()
         }));
         setRecentActivities(activities);
+
+        // Log dashboard view after data is loaded
+        logActivity(
+          user?.userId,
+          user?.organizationId,
+          'dashboard_viewed',
+          'dashboard',
+          {
+            role: user?.roleName,
+            isAdmin,
+            totalDatasets: isAdmin ? adminData?.totalUsers : dashboardData?.totalDatasets,
+            totalCases: dashboardData?.totalCases || 0,
+            pendingApprovals: isAdmin ? adminData?.recentActivity : dashboardData?.pendingApprovals,
+            viewTimestamp: new Date()?.toISOString()
+          }
+        );
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');
@@ -806,7 +823,7 @@ const Dashboard = () => {
                 description="Import new customer data for analysis"
                 linkTo="/dataset-management"
                 variant="default"
-                onClick={() => {}}
+                onClick={() => logActivity(user?.userId, user?.organizationId, 'quick_action_clicked', 'dashboard', { action: 'upload_dataset' })}
               />
               
               <QuickActionButton
@@ -815,7 +832,7 @@ const Dashboard = () => {
                 description="Create and manage compliance rules"
                 linkTo="/rule-management"
                 variant="default"
-                onClick={() => {}}
+                onClick={() => logActivity(user?.userId, user?.organizationId, 'quick_action_clicked', 'dashboard', { action: 'configure_rules' })}
               />
               
               <QuickActionButton
@@ -824,7 +841,7 @@ const Dashboard = () => {
                 description="Test rules against current dataset"
                 linkTo="/rule-management"
                 variant="secondary"
-                onClick={() => {}}
+                onClick={() => logActivity(user?.userId, user?.organizationId, 'quick_action_clicked', 'dashboard', { action: 'run_simulation' })}
               />
               
               <QuickActionButton
@@ -833,7 +850,7 @@ const Dashboard = () => {
                 description="Review and enrich flagged cases"
                 linkTo="/business-enrichment-portal"
                 variant="accent"
-                onClick={() => {}}
+                onClick={() => logActivity(user?.userId, user?.organizationId, 'quick_action_clicked', 'dashboard', { action: 'review_cases' })}
               />
               
               <QuickActionButton
@@ -842,7 +859,7 @@ const Dashboard = () => {
                 description="Create compliance report for submission"
                 linkTo="/reporting"
                 variant="default"
-                onClick={() => {}}
+                onClick={() => logActivity(user?.userId, user?.organizationId, 'quick_action_clicked', 'dashboard', { action: 'generate_report' })}
               />
             </div>
           </div>

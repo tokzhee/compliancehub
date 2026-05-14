@@ -122,7 +122,15 @@ const RoleManagement = () => {
         user?.userId,
         user?.organizationId,
         'role_updated',
-        'role_management'
+        'role_management',
+        {
+          roleId: selectedRole?.id,
+          roleName: formData?.name || selectedRole?.name,
+          previousName: selectedRole?.name,
+          previousDescription: selectedRole?.description,
+          newName: formData?.name,
+          newDescription: formData?.description
+        }
       );
       await fetchRoles();
       setShowEditModal(false);
@@ -145,7 +153,15 @@ const RoleManagement = () => {
         user?.userId,
         user?.organizationId,
         'role_permissions_updated',
-        'role_management'
+        'role_management',
+        {
+          roleId: selectedRole?.id,
+          roleName: selectedRole?.name,
+          previousPermissionCount: rolePermissions?.length || 0,
+          newPermissionCount: permissions?.length || 0,
+          permissionsAdded: permissions?.filter(p => !rolePermissions?.includes(p)) || [],
+          permissionsRemoved: rolePermissions?.filter(p => !permissions?.includes(p)) || []
+        }
       );
       await fetchRoles();
       setShowManagePermissionsModal(false);
@@ -175,7 +191,14 @@ const RoleManagement = () => {
         user?.userId,
         user?.organizationId,
         'role_created',
-        'role_management'
+        'role_management',
+        {
+          newRoleId: data?.id || null,
+          newRoleName: formData?.name,
+          description: formData?.description,
+          initialPermissionCount: formData?.permissions?.length || 0,
+          initialPermissions: formData?.permissions || []
+        }
       );
       await fetchRoles();
       setShowCreateModal(false);
@@ -189,13 +212,19 @@ const RoleManagement = () => {
       return;
     }
 
+    const roleToDelete = roles?.find(r => r?.id === roleId);
     try {
       await roleService?.deleteRole(roleId);
       await logActivity(
         user?.userId,
         user?.organizationId,
         'role_deleted',
-        'role_management'
+        'role_management',
+        {
+          deletedRoleId: roleId,
+          deletedRoleName: roleToDelete?.name || null,
+          affectedUserCount: roleToDelete?.userCount || 0
+        }
       );
       toast?.success('Role deleted successfully');
       setRoles(roles?.filter(role => role?.id !== roleId));

@@ -186,9 +186,7 @@ export const getResourceById = async (resourceId) => {
 export const getResourceHistory = async (resourceId) => {
   if (useRestApi) {
     try {
-      const response = await apiClient?.get(`/api/resources/${resourceId}/history`, {
-        params: { resourceId }
-      });
+      const response = await apiClient?.get(`/api/resources/${resourceId}/history`);
       return response?.data || [];
     } catch (error) {
       console.error('Error fetching resource history:', error);
@@ -255,7 +253,7 @@ export const deleteResourceContent = async (resourceId) => {
     try {
       const userId = localStorage.getItem('user_id');
       await apiClient?.delete(`/api/resources/${resourceId}`, {
-        params: { resourceId, deletedBy: userId }
+        params: { deletedBy: userId }
       });
     } catch (error) {
       console.error('Error deleting resource:', error);

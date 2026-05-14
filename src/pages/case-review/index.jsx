@@ -151,7 +151,13 @@ const CaseReview = () => {
       user?.userId,
       user?.organizationId,
       'case_comment_added',
-      `Comment added to case${selectedCase?.id ? ` #${selectedCase?.id}` : ''}`
+      `Comment added to case${selectedCase?.id ? ` #${selectedCase?.id}` : ''}`,
+      {
+        caseId: selectedCase?.id || null,
+        caseCustomerName: selectedCase?.customerName || selectedCase?.customer_name || null,
+        commentType: commentData?.commentType || null,
+        commentLength: commentData?.comment?.length || 0
+      }
     );
   };
 
@@ -163,7 +169,14 @@ const CaseReview = () => {
       user?.userId,
       user?.organizationId,
       'case_override_submitted',
-      `Override decision submitted for case${selectedCase?.id ? ` #${selectedCase?.id}` : ''}`
+      `Override decision submitted for case${selectedCase?.id ? ` #${selectedCase?.id}` : ''}`,
+      {
+        caseId: selectedCase?.id || null,
+        caseCustomerName: selectedCase?.customerName || selectedCase?.customer_name || null,
+        overrideDecision: overrideData?.decision || null,
+        overrideReason: overrideData?.reason || null,
+        previousStatus: selectedCase?.reviewStatus || null
+      }
     );
   };
 
@@ -177,7 +190,13 @@ const CaseReview = () => {
         user?.userId,
         user?.organizationId,
         'cases_assigned',
-        `${caseCount} case${caseCount !== 1 ? 's' : ''} assigned to ${assignmentData?.assigneeId || 'user'}`
+        `${caseCount} case${caseCount !== 1 ? 's' : ''} assigned to ${assignmentData?.assigneeId || 'user'}`,
+        {
+          caseIds: assignmentData?.caseIds || [],
+          affectedCaseCount: caseCount,
+          assigneeId: assignmentData?.assigneeId || null,
+          assigneeName: assignmentData?.assigneeName || null
+        }
       );
 
       toast?.success(`${caseCount} case${caseCount !== 1 ? 's' : ''} assigned successfully`);
@@ -199,7 +218,13 @@ const CaseReview = () => {
         user?.userId,
         user?.organizationId,
         'cases_status_updated',
-        `${caseCount} case${caseCount !== 1 ? 's' : ''} status updated to "${newStatus}"`
+        `${caseCount} case${caseCount !== 1 ? 's' : ''} status updated to "${newStatus}"`,
+        {
+          caseIds: selectedCases?.map(c => c?.id) || [],
+          affectedCaseCount: caseCount,
+          previousStatuses: selectedCases?.map(c => ({ id: c?.id, status: c?.reviewStatus })) || [],
+          newStatus
+        }
       );
 
       toast?.success(`${caseCount} case${caseCount !== 1 ? 's' : ''} updated to ${newStatus}`);

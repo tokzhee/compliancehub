@@ -158,11 +158,19 @@ const Resources = () => {
 
   const handleEditorSave = () => {
     // Refresh resources list
+    const editedSection = resourceSections?.find(s => s?.id === editingResourceId);
     logActivity(
       user?.userId,
       user?.organizationId,
       editingResourceId ? 'resource_updated' : 'resource_created',
-      'resources'
+      'resources',
+      {
+        resourceId: editingResourceId || null,
+        resourceTitle: editedSection?.title || null,
+        resourceCategory: editedSection?.category || null,
+        resourceTags: editedSection?.tags || [],
+        isNewResource: !editingResourceId
+      }
     );
     fetchResources();
   };

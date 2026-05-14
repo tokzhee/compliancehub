@@ -258,7 +258,16 @@ const RuleManagement = () => {
         user?.userId,
         user?.organizationId,
         isEditMode ? 'rule_updated' : 'rule_created',
-        `Rule "${formData?.ruleName}" ${isEditMode ? 'updated' : 'created'} (${selectedRegime})`
+        `Rule "${formData?.ruleName}" ${isEditMode ? 'updated' : 'created'} (${selectedRegime})`,
+        {
+          ruleId: data?.id || selectedRule?.id || null,
+          ruleName: formData?.ruleName,
+          regimeType: selectedRegime,
+          segmentId: formData?.segmentId || null,
+          reportingYear: formData?.reportingYear || null,
+          conditionCount: formData?.conditions?.length || ruleConditions?.length || 0,
+          isEditMode
+        }
       );
 
       // Refresh rules list
@@ -290,7 +299,13 @@ const RuleManagement = () => {
               user?.userId,
               user?.organizationId,
               'rule_submitted_for_approval',
-              `Rule "${formData?.ruleName}" submitted for approval (${selectedRegime})`
+              `Rule "${formData?.ruleName}" submitted for approval (${selectedRegime})`,
+              {
+                ruleId: data?.id || null,
+                ruleName: formData?.ruleName,
+                regimeType: selectedRegime,
+                submittedByUserId: user?.userId
+              }
             );
 
             // Refresh rules list again to show updated status
@@ -372,7 +387,14 @@ const RuleManagement = () => {
         user?.userId,
         user?.organizationId,
         'rule_submitted_for_approval',
-        `Rule "${rule?.ruleName}" submitted for approval (${selectedRegime})`
+        `Rule "${rule?.ruleName}" submitted for approval (${selectedRegime})`,
+        {
+          ruleId: rule?.id,
+          ruleName: rule?.ruleName,
+          regimeType: selectedRegime,
+          versionNumber: rule?.versionNumber || null,
+          submittedByUserId: user?.userId
+        }
       );
 
       // Refresh rules list
@@ -412,7 +434,17 @@ const RuleManagement = () => {
         user?.userId,
         user?.organizationId,
         approvalAction === 'approve' ? 'rule_approved' : 'rule_rejected',
-        `Rule "${ruleName}" ${approvalAction === 'approve' ? 'approved' : 'rejected'} (${selectedRegime})`
+        `Rule "${ruleName}" ${approvalAction === 'approve' ? 'approved' : 'rejected'} (${selectedRegime})`,
+        {
+          ruleId: ruleId,
+          ruleName: ruleName,
+          regimeType: selectedRegime,
+          approvalAction,
+          approverUserId: user?.userId,
+          approverName: user?.fullName || user?.email || null,
+          comments: comments || null,
+          versionNumber: selectedRule?.versionNumber || null
+        }
       );
 
       // Refresh rules list
@@ -550,7 +582,15 @@ const RuleManagement = () => {
         user?.userId,
         user?.organizationId,
         'rule_retired',
-        `Rule "${ruleName}" retired (${selectedRegime}): ${retirementReason || 'No reason provided'}`
+        `Rule "${ruleName}" retired (${selectedRegime}): ${retirementReason || 'No reason provided'}`,
+        {
+          ruleId: ruleId,
+          ruleName: ruleName,
+          regimeType: selectedRegime,
+          retirementReason: retirementReason || null,
+          retiredByUserId: user?.userId,
+          versionNumber: selectedRule?.versionNumber || null
+        }
       );
 
       // Refresh rules list
@@ -588,7 +628,14 @@ const RuleManagement = () => {
         user?.userId,
         user?.organizationId,
         'rule_deleted',
-        `Rule "${rule?.ruleName}" deleted (${selectedRegime})`
+        `Rule "${rule?.ruleName}" deleted (${selectedRegime})`,
+        {
+          ruleId: rule?.id,
+          ruleName: rule?.ruleName,
+          regimeType: selectedRegime,
+          versionNumber: rule?.versionNumber || null,
+          deletedByUserId: user?.userId
+        }
       );
 
       // Refresh rules list

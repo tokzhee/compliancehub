@@ -172,7 +172,15 @@ const DatasetManagement = () => {
         user?.userId,
         user?.organizationId,
         'dataset_uploaded',
-        'dataset_management'
+        'dataset_management',
+        {
+          datasetName: formData?.datasetName || null,
+          reportingYear: formData?.reportingYear || filters?.reportingYear || null,
+          regimeType: formData?.regimeType || null,
+          fileName: formData?.file?.name || null,
+          fileSize: formData?.file?.size || null,
+          recordCount: formData?.recordCount || null
+        }
       );
       toast?.success(`Dataset "${formData?.datasetName}" uploaded successfully`);
     } catch (error) {

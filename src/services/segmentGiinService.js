@@ -218,10 +218,7 @@ export const segmentGiinService = {
   async rejectConfiguration(configId, rejectedByUserId, comments) {
     if (useRestApi) {
       try {
-        const response = await apiClient?.put(`/api/segments/${configId}/reject`, {
-          segmentId: configId,
-          reason: comments
-        });
+        const response = await apiClient?.put(`/api/segments/${configId}/reject`);
         return { data: response?.data };
       } catch (error) {
         console.error('Error rejecting configuration:', error?.message);

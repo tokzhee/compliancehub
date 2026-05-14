@@ -282,9 +282,7 @@ export const fatcaCrsRuleService = {
   async getRuleConditions(ruleSetId) {
     if (useRestApi) {
       try {
-        const response = await apiClient?.get(`/api/rules/${ruleSetId}/conditions`, {
-          params: { ruleSetId }
-        });
+        const response = await apiClient?.get(`/api/rules/${ruleSetId}/conditions`);
         return response?.data || [];
       } catch (error) {
         console.error('Error fetching rule conditions:', error?.message);
@@ -381,7 +379,7 @@ export const fatcaCrsRuleService = {
   async getRuleHistory(ruleSetId, filters = {}) {
     if (useRestApi) {
       try {
-        const params = { ruleSetId };
+        const params = {};
         if (filters?.changeType) params.changeType = filters?.changeType;
         if (filters?.changedBy) params.changedBy = filters?.changedBy;
         if (filters?.startDate) params.startDate = filters?.startDate;

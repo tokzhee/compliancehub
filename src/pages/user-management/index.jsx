@@ -337,7 +337,15 @@ const UserManagement = () => {
         currentUser?.userId,
         currentUser?.organizationId,
         'user_created',
-        `user_management`
+        `user_management`,
+        {
+          newUserId: result?.data?.id || null,
+          newUserEmail: newUserData?.email,
+          newUserName: newUserData?.username,
+          assignedRoleId: newUserData?.roleId,
+          assignedRoleName: availableRoles?.find(r => r?.value === newUserData?.roleId)?.label || null,
+          authenticationSource: newUserData?.authenticationSource || 'local_db'
+        }
       );
       toast?.success(`User "${newUserData?.username}" created successfully`);
     } catch (error) {
@@ -367,7 +375,16 @@ const UserManagement = () => {
         currentUser?.userId,
         currentUser?.organizationId,
         'user_role_updated',
-        `user_management`
+        `user_management`,
+        {
+          targetUserId: userId,
+          targetUserEmail: user?.email,
+          targetUserName: user?.username,
+          previousRoleId: user?.roleId || null,
+          previousRoleName: user?.role || null,
+          newRoleId: newRoleId,
+          newRoleName: roleLabel
+        }
       );
       toast?.success(`User "${user?.username}" updated successfully`);
     } catch (error) {
@@ -390,7 +407,14 @@ const UserManagement = () => {
           currentUser?.userId,
           currentUser?.organizationId,
           newStatus === 'suspended' ? 'user_suspended' : 'user_activated',
-          `user_management`
+          `user_management`,
+          {
+            targetUserId: user?.userId,
+            targetUserEmail: user?.email,
+            targetUserName: user?.username,
+            previousStatus: user?.status,
+            newStatus: newStatus === 'suspended' ? 'Suspended' : 'Active'
+          }
         );
         toast?.success(statusMessage);
         setUsers(prevUsers => 

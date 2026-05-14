@@ -121,7 +121,14 @@ const RuleConfiguration = () => {
       user?.userId,
       user?.organizationId,
       'rule_configuration_created',
-      'rule_configuration'
+      'rule_configuration',
+      {
+        ruleId: newRule?.id,
+        ruleName: formData?.ruleName,
+        ruleType: formData?.ruleType,
+        effectiveDate: formData?.effectiveDate,
+        version: '1.0'
+      }
     );
   };
 
@@ -149,7 +156,15 @@ const RuleConfiguration = () => {
       user?.userId,
       user?.organizationId,
       'rule_configuration_activated',
-      'rule_configuration'
+      'rule_configuration',
+      {
+        ruleId: rule?.id,
+        ruleName: rule?.ruleName,
+        ruleType: rule?.ruleType,
+        previousStatus: rule?.status,
+        newStatus: 'active',
+        activationComments: comments || null
+      }
     );
     setIsActivateModalOpen(false);
     setSelectedRule(null);

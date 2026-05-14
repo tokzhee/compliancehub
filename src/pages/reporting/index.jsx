@@ -92,7 +92,15 @@ const Reporting = () => {
         user?.userId,
         user?.organizationId,
         'report_generated',
-        'reporting'
+        'reporting',
+        {
+          reportJobId: newJob?.id || null,
+          reportType: reportData?.reportType || null,
+          regimeType: reportData?.regimeType || null,
+          reportingYear: reportData?.reportingYear || null,
+          segmentId: reportData?.segmentId || null,
+          generatedByUserId: user?.userId
+        }
       );
       setShowGenerateModal(false);
     } catch (err) {
@@ -102,6 +110,7 @@ const Reporting = () => {
   };
 
   const handleApproveReport = async (reportId) => {
+    const reportToApprove = reportingJobs?.find(j => j?.id === reportId);
     try {
       await reportingService?.approveReport(reportId, user?.userId);
 
@@ -117,7 +126,14 @@ const Reporting = () => {
         user?.userId,
         user?.organizationId,
         'report_approved',
-        'reporting'
+        'reporting',
+        {
+          reportJobId: reportId,
+          reportType: reportToApprove?.reportType || reportToApprove?.report_type || null,
+          regimeType: reportToApprove?.regimeType || reportToApprove?.regime_type || null,
+          reportingYear: reportToApprove?.reportingYear || reportToApprove?.reporting_year || null,
+          approverUserId: user?.userId
+        }
       );
     } catch (err) {
       console.error('Error approving report:', err);

@@ -19,9 +19,7 @@ export const enrichmentService = {
 
   async getCaseDetails(caseId) {
     try {
-      const response = await apiClient?.get(`/api/enrichment/cases/${caseId}/details`, {
-        params: { caseId }
-      });
+      const response = await apiClient?.get(`/api/enrichment/cases/${caseId}/details`);
       return response?.data || [];
     } catch (error) {
       console.error('Error fetching case details:', error?.message);
@@ -46,9 +44,7 @@ export const enrichmentService = {
 
   async markCaseReady(caseId) {
     try {
-      const response = await apiClient?.put(`/api/enrichment/cases/${caseId}/ready`, null, {
-        params: { caseId }
-      });
+      const response = await apiClient?.put(`/api/enrichment/cases/${caseId}/ready`);
       return { data: response?.data };
     } catch (error) {
       console.error('Error marking case ready:', error?.message);
@@ -56,7 +52,7 @@ export const enrichmentService = {
     }
   },
 
-  async addCaseNote(caseId, createdBy, note, noteType = 'General') {
+  async addCaseNote(caseId, createdBy, note) {
     try {
       const response = await apiClient?.post(`/api/enrichment/cases/${caseId}/notes`, {
         caseId,
@@ -72,9 +68,7 @@ export const enrichmentService = {
 
   async getCaseNotes(caseId) {
     try {
-      const response = await apiClient?.get(`/api/enrichment/cases/${caseId}/notes`, {
-        params: { caseId }
-      });
+      const response = await apiClient?.get(`/api/enrichment/cases/${caseId}/notes`);
       return response?.data || [];
     } catch (error) {
       console.error('Error fetching case notes:', error?.message);

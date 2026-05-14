@@ -9,7 +9,7 @@ const useRestApi = !!import.meta.env?.VITE_API_BASE_URL;
 export const getRuleVersionHistory = async (ruleId, filters = {}) => {
   if (useRestApi) {
     try {
-      const params = { ruleSetId: ruleId };
+      const params = {};
       if (filters?.changeType) params.changeType = filters?.changeType;
       if (filters?.changedBy) params.changedBy = filters?.changedBy;
       if (filters?.startDate) params.startDate = filters?.startDate;
@@ -98,6 +98,16 @@ export const getVersionDetails = async (versionId) => {
  * Compare two versions of a rule
  */
 export const compareVersions = async (ruleId, version1Number, version2Number) => {
+  if (useRestApi) {
+    try {
+      const params = { version1: version1Number, version2: version2Number };
+      const response = await apiClient?.get(`/api/rules/${ruleId}/history/compare`, { params });
+      return { success: true, data: response?.data };
+    } catch (error) {
+      console.error('Error comparing versions:', error);
+      return { success: false, error: error?.message };
+    }
+  }
   try {
     const { data, error } = await supabase?.from('fatca_crs_rule_version_history')?.select('*')?.eq('rule_id', ruleId)?.in('version_number', [version1Number, version2Number])?.order('version_number', { ascending: true });
     if (error) throw error;
@@ -130,7 +140,19 @@ export const compareVersions = async (ruleId, version1Number, version2Number) =>
 /**
  * Get all users who have modified a rule (for filter dropdown)
  */
-export const getRuleModifiers = async (ruleId) => {
+export const getRuleModifiers = async (ruleId, limit, offset) => {
+  if (useRestApi) {
+    try {
+      const params = {};
+      if (limit !== undefined) params.limit = limit;
+      if (offset !== undefined) params.offset = offset;
+      const response = await apiClient?.get(`/api/rules/${ruleId}/history/modifiers`, { params });
+      return { success: true, data: response?.data || [] };
+    } catch (error) {
+      console.error('Error fetching rule modifiers:', error);
+      return { success: false, error: error?.message };
+    }
+  }
   try {
     const { data, error } = await supabase?.from('fatca_crs_rule_version_history')?.select(`
       changed_by_user_id, changed_by:user_profiles!changed_by_user_id(id, full_name, email)
@@ -176,56 +198,35 @@ export const getRuleVersionStats = async (ruleId) => {
 export const getConditionChanges = async (ruleId, versionNumber) => {
   try {
     const { data, error } = await supabase?.from('fatca_crs_rule_version_history')?.select('changes')?.eq('rule_id', ruleId)?.eq('version_number', versionNumber)?.single();
-
     if (error) throw error;
-
     const oldConditions = data?.changes?.old_values?.conditions || [];
     const newConditions = data?.changes?.new_values?.conditions || [];
-
-    // Categorize condition changes
     const added = [];
     const removed = [];
     const modified = [];
-
-    // Find added conditions
     newConditions?.forEach(newCond => {
-      const matchingOld = oldConditions?.find(oldCond => 
-        oldCond?.field_name === newCond?.field_name && 
+      const matchingOld = oldConditions?.find(oldCond =>
+        oldCond?.field_name === newCond?.field_name &&
         oldCond?.sequence_order === newCond?.sequence_order
       );
-
       if (!matchingOld) {
         added?.push(newCond);
-      } else if (JSON.stringify(oldCond) !== JSON.stringify(newCond)) {
+      } else if (JSON.stringify(matchingOld) !== JSON.stringify(newCond)) {
         modified?.push({ old: matchingOld, new: newCond });
       }
     });
-
-    // Find removed conditions
     oldConditions?.forEach(oldCond => {
-      const matchingNew = newConditions?.find(newCond => 
-        newCond?.field_name === oldCond?.field_name && 
+      const matchingNew = newConditions?.find(newCond =>
+        newCond?.field_name === oldCond?.field_name &&
         newCond?.sequence_order === oldCond?.sequence_order
       );
-
       if (!matchingNew) {
         removed?.push(oldCond);
       }
     });
-
-    return {
-      success: true,
-      data: {
-        added,
-        removed,
-        modified
-      }
-    };
+    return { success: true, data: { added, removed, modified } };
   } catch (error) {
     console.error('Error fetching condition changes:', error);
-    return {
-      success: false,
-      error: error?.message
-    };
+    return { success: false, error: error?.message };
   }
 };

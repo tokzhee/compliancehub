@@ -124,7 +124,14 @@ const SubmissionLogScreen = () => {
         user?.userId,
         user?.organizationId,
         'submission_submitted_for_approval',
-        `Submission #${submission?.id} submitted for approval (${selectedRegime})`
+        `Submission #${submission?.id} submitted for approval (${selectedRegime})`,
+        {
+          submissionId: submission?.id,
+          regimeType: selectedRegime,
+          submissionChannel: submission?.submission_channel || null,
+          reportBatchId: submission?.report_batch_id || null,
+          submittedByUserId: user?.userId
+        }
       );
 
       // Refresh submissions
@@ -154,7 +161,14 @@ const SubmissionLogScreen = () => {
           user?.userId,
           user?.organizationId,
           'submission_approved',
-          `Submission #${submissionId} approved (${selectedRegime})`
+          `Submission #${submissionId} approved (${selectedRegime})`,
+          {
+            submissionId,
+            regimeType: selectedRegime,
+            approverUserId: user?.userId,
+            comments: comments || null,
+            submissionChannel: selectedSubmission?.submission_channel || null
+          }
         );
       } else {
         const { error } = await submissionService?.rejectSubmission(submissionId, user?.userId, comments);
@@ -169,7 +183,14 @@ const SubmissionLogScreen = () => {
           user?.userId,
           user?.organizationId,
           'submission_rejected',
-          `Submission #${submissionId} rejected (${selectedRegime})`
+          `Submission #${submissionId} rejected (${selectedRegime})`,
+          {
+            submissionId,
+            regimeType: selectedRegime,
+            rejectorUserId: user?.userId,
+            comments: comments || null,
+            submissionChannel: selectedSubmission?.submission_channel || null
+          }
         );
       }
 

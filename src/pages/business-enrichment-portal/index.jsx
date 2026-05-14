@@ -171,7 +171,15 @@ const BusinessEnrichmentPortal = () => {
         user?.userId,
         user?.organizationId,
         'case_enrichment_saved',
-        'business_enrichment_portal'
+        'business_enrichment_portal',
+        {
+          caseId: selectedCase?.id || null,
+          customerName: selectedCase?.customer_name || null,
+          accountNumber: selectedCase?.account_number || null,
+          regimeType: selectedRegime,
+          enrichedFieldCount: Object.keys(enrichmentData)?.filter(k => enrichmentData?.[k])?.length || 0,
+          enrichedFields: Object.keys(enrichmentData)?.filter(k => enrichmentData?.[k])
+        }
       );
       setShowEnrichModal(false);
       setSelectedCase(null);
@@ -197,7 +205,12 @@ const BusinessEnrichmentPortal = () => {
         user?.userId,
         user?.organizationId,
         'case_marked_ready',
-        'business_enrichment_portal'
+        'business_enrichment_portal',
+        {
+          caseId: caseId,
+          regimeType: selectedRegime,
+          markedByUserId: user?.userId
+        }
       );
     } catch (err) {
       console.error('Error marking case ready:', err);

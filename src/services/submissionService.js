@@ -18,17 +18,12 @@ export const submissionService = {
     }
   },
 
-  async getSubmissionStatistics(organizationId) {
+  async getSubmissionStatistics(organizationId, reportingYear) {
     try {
-      const response = await apiClient?.get('/api/submissions', { params: { organizationId } });
-      const data = response?.data || [];
-      const arr = Array.isArray(data) ? data : [];
-      return {
-        totalSubmissions: arr?.length,
-        successfulSubmissions: arr?.filter(s => s?.response_status === 'Acknowledged' || s?.status === 'Acknowledged')?.length,
-        pendingSubmissions: arr?.filter(s => s?.response_status === 'Pending' || s?.status === 'Pending')?.length,
-        errorSubmissions: arr?.filter(s => ['Error', 'Rejected']?.includes(s?.response_status || s?.status))?.length
-      };
+      const params = { organizationId };
+      if (reportingYear) params.reportingYear = reportingYear;
+      const response = await apiClient?.get('/api/submissions/stats', { params });
+      return response?.data || { totalSubmissions: 0, successfulSubmissions: 0, pendingSubmissions: 0, errorSubmissions: 0 };
     } catch (error) {
       console.error('Error fetching submission statistics:', error?.message);
       return { totalSubmissions: 0, successfulSubmissions: 0, pendingSubmissions: 0, errorSubmissions: 0 };
@@ -61,12 +56,11 @@ export const submissionService = {
     }
   },
 
-  async approveSubmission(submissionId, approvedByUserId, comments) {
+  async approveSubmission(submissionId, approvedByUserId) {
     try {
       const response = await apiClient?.put(`/api/submissions/${submissionId}/approve`, {
         submissionId,
-        approvedBy: approvedByUserId,
-        comments
+        approvedBy: approvedByUserId
       });
       return { data: response?.data };
     } catch (error) {
@@ -75,13 +69,9 @@ export const submissionService = {
     }
   },
 
-  async rejectSubmission(submissionId, rejectedByUserId, comments) {
+  async rejectSubmission(submissionId) {
     try {
-      const response = await apiClient?.put(`/api/submissions/${submissionId}/reject`, {
-        submissionId,
-        approvedBy: rejectedByUserId,
-        comments
-      });
+      const response = await apiClient?.put(`/api/submissions/${submissionId}/reject`);
       return { data: response?.data };
     } catch (error) {
       console.error('Error rejecting submission:', error?.message);
