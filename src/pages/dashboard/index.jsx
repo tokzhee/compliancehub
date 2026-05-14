@@ -11,10 +11,12 @@ import { dashboardService } from '../../services/dashboardService';
 import { supabase } from '../../lib/supabase';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonCard } from '../../components/ui/SkeletonLoader';
+import { useToast } from '../../contexts/ToastContext';
 
 const Dashboard = () => {
   const { isSidebarExpanded } = useNavigationContext();
   const { user, hasPermission } = useUserContext();
+  const toast = useToast();
 
   const [dashboardData, setDashboardData] = useState({
     totalDatasets: 0,
@@ -42,7 +44,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const isAdmin = user?.roleName === 'System Administrator';
+  const isAdmin = user?.roleName === 'Admin' || user?.roleName === 'System Administrator' || user?.permissions?.includes('VIEW_ADMIN_METRICS');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -66,11 +68,26 @@ const Dashboard = () => {
         }
 
         // Fetch recent activities for all roles
-        const activities = await dashboardService?.getRecentActivities(user?.organizationId, 8);
+        const rawActivities = await dashboardService?.getRecentActivities(user?.organizationId, 8);
+        // Normalize activity fields: map API field names to what ActivityLogTable expects
+        const activities = (rawActivities || [])?.map(a => ({
+          ...a,
+          id: a?.id || a?.activityId,
+          action: a?.action || a?.activityType || a?.activity_type || 'Activity',
+          userName: a?.userName || a?.fullName || a?.full_name || a?.user_profiles?.full_name || 'Unknown',
+          details: a?.details || a?.description || '',
+          // Normalize timestamp: support createdAt, created_at, timestamp
+          timestamp: (() => {
+            const raw = a?.timestamp || a?.createdAt || a?.created_at || '';
+            if (!raw) return '';
+            return typeof raw === 'string' ? raw?.replace(' ', 'T') : raw;
+          })()
+        }));
         setRecentActivities(activities);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');
+        toast?.error?.('Failed to load dashboard data. Please refresh the page.');
       } finally {
         setLoading(false);
       }

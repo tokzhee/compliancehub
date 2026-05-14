@@ -15,6 +15,7 @@ import EditAdConfigModal from './components/EditAdConfigModal';
 import { adConfigService } from '../../services/adConfigService';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonGrid } from '../../components/ui/SkeletonLoader';
+import { logActivity } from '../../services/activityService';
 
 
 const AdConfiguration = () => {
@@ -81,6 +82,12 @@ const AdConfiguration = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'ad_config_created',
+        'ad_configuration'
+      );
       await fetchAdConfigurations();
       setIsCreateModalOpen(false);
     } catch (err) {
@@ -103,6 +110,12 @@ const AdConfiguration = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'ad_config_updated',
+        'ad_configuration'
+      );
       await fetchAdConfigurations();
       setIsEditModalOpen(false);
       setSelectedConfig(null);
@@ -125,6 +138,12 @@ const AdConfiguration = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'ad_config_deleted',
+        'ad_configuration'
+      );
       await fetchAdConfigurations();
     } catch (err) {
       console.error('Error deleting AD configuration:', err);

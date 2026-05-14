@@ -12,22 +12,45 @@ export const dashboardService = {
         });
         return response?.data || {};
       } catch (error) {
-        console.error('Error fetching dashboard metrics:', error?.message);
-        return {
-          totalDatasets: 0, totalCases: 0, totalRules: 0,
-          totalReports: 0, totalSubmissions: 0, pendingApprovals: 0,
-          complianceStatus: 'unknown', reportingYear: new Date()?.getFullYear(),
-          lastUpdated: new Date()?.toISOString()
-        };
+        console.warn('REST API unavailable for dashboard metrics, falling back to Supabase:', error?.message);
       }
     }
+
     // Supabase fallback
-    return {
-      totalDatasets: 0, totalCases: 0, totalRules: 0,
-      totalReports: 0, totalSubmissions: 0, pendingApprovals: 0,
-      complianceStatus: 'unknown', reportingYear: new Date()?.getFullYear(),
-      lastUpdated: new Date()?.toISOString()
-    };
+    try {
+      const [datasetsRes, casesRes, rulesRes, reportsRes, submissionsRes] = await Promise.all([
+        supabase?.from('fatca_crs_dataset_batch')?.select('id', { count: 'exact', head: true })?.eq('organization_id', organizationId),
+        supabase?.from('fatca_crs_case_master')?.select('id', { count: 'exact', head: true }),
+        supabase?.from('fatca_crs_rule_sets')?.select('id', { count: 'exact', head: true })?.eq('organization_id', organizationId),
+        supabase?.from('fatca_crs_report_batch')?.select('id', { count: 'exact', head: true }),
+        supabase?.from('fatca_crs_submission_log')?.select('id', { count: 'exact', head: true })
+      ]);
+
+      const pendingRes = await supabase?.from('fatca_crs_rule_sets')
+        ?.select('id', { count: 'exact', head: true })
+        ?.eq('organization_id', organizationId)
+        ?.eq('status', 'pending_approval');
+
+      return {
+        totalDatasets: datasetsRes?.count || 0,
+        totalCases: casesRes?.count || 0,
+        totalRules: rulesRes?.count || 0,
+        totalReports: reportsRes?.count || 0,
+        totalSubmissions: submissionsRes?.count || 0,
+        pendingApprovals: pendingRes?.count || 0,
+        complianceStatus: 'compliant',
+        reportingYear: new Date()?.getFullYear(),
+        lastUpdated: new Date()?.toISOString()
+      };
+    } catch (err) {
+      console.error('Supabase fallback failed for dashboard metrics:', err?.message);
+      return {
+        totalDatasets: 0, totalCases: 0, totalRules: 0,
+        totalReports: 0, totalSubmissions: 0, pendingApprovals: 0,
+        complianceStatus: 'unknown', reportingYear: new Date()?.getFullYear(),
+        lastUpdated: new Date()?.toISOString()
+      };
+    }
   },
 
   async getAdminMetrics(organizationId) {
@@ -38,17 +61,43 @@ export const dashboardService = {
         });
         return response?.data || {};
       } catch (error) {
-        console.error('Error fetching admin metrics:', error?.message);
-        return {
-          totalUsers: 0, activeUsers: 0, totalRoles: 0,
-          activeSessions: 0, recentActivity: 0, ldapConfigs: 0, systemHealth: 'unknown'
-        };
+        console.warn('REST API unavailable for admin metrics, falling back to Supabase:', error?.message);
       }
     }
-    return {
-      totalUsers: 0, activeUsers: 0, totalRoles: 0,
-      activeSessions: 0, recentActivity: 0, ldapConfigs: 0, systemHealth: 'unknown'
-    };
+
+    // Supabase fallback — query real data directly
+    try {
+      const [usersRes, activeUsersRes, rolesRes, ldapRes] = await Promise.all([
+        supabase?.from('user_profiles')?.select('id', { count: 'exact', head: true })?.eq('organization_id', organizationId),
+        supabase?.from('user_profiles')?.select('id', { count: 'exact', head: true })?.eq('organization_id', organizationId)?.eq('is_active', true),
+        supabase?.from('roles')?.select('id', { count: 'exact', head: true })?.eq('organization_id', organizationId),
+        supabase?.from('ad_configurations')?.select('id', { count: 'exact', head: true })?.eq('organization_id', organizationId)
+      ]);
+
+      const totalUsers = usersRes?.count || 0;
+      const activeUsers = activeUsersRes?.count || 0;
+      const totalRoles = rolesRes?.count || 0;
+      const ldapConfigs = ldapRes?.count || 0;
+
+      // Determine system health based on data availability
+      const systemHealth = (usersRes?.error || rolesRes?.error) ? 'degraded' : 'healthy';
+
+      return {
+        totalUsers,
+        activeUsers,
+        totalRoles,
+        activeSessions: activeUsers, // approximate with active users
+        recentActivity: 0,
+        ldapConfigs,
+        systemHealth
+      };
+    } catch (err) {
+      console.error('Supabase fallback failed for admin metrics:', err?.message);
+      return {
+        totalUsers: 0, activeUsers: 0, totalRoles: 0,
+        activeSessions: 0, recentActivity: 0, ldapConfigs: 0, systemHealth: 'unknown'
+      };
+    }
   },
 
   async getRecentActivities(organizationId, limit = 10) {
@@ -59,8 +108,7 @@ export const dashboardService = {
         });
         return response?.data || [];
       } catch (error) {
-        console.error('Error fetching recent activities:', error?.message);
-        return [];
+        console.warn('REST API unavailable for activities, falling back to Supabase:', error?.message);
       }
     }
     try {

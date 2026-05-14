@@ -1,169 +1,182 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { supabase } from '../lib/supabase';
+import apiClient from '../lib/apiClient';
 import { permissionService } from '../services/permissionService';
+import { useToast } from './ToastContext';
 
 const UserContext = createContext(null);
 
 export const UserContextProvider = ({ children }) => {
   const { userProfile, loading: authLoading, profileLoading } = useAuth();
+  const toast = useToast();
   
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserDetails = async () => {
-      console.log('UserContext: fetchUserDetails called', {
-        authLoading,
-        profileLoading,
-        hasUserProfile: !!userProfile,
-        userProfileId: userProfile?.id,
-        userProfileEmail: userProfile?.email,
-        userProfileOrgId: userProfile?.organization_id,
-        userProfileRoleId: userProfile?.role_id
-      });
+    let isMounted = true;
+    const controller = new AbortController();
 
-      // Wait for both auth and profile to finish loading
+    const fetchUserDetails = async () => {
       if (authLoading || profileLoading) {
-        console.log('UserContext: Still loading (authLoading:', authLoading, ', profileLoading:', profileLoading, ')');
-        setLoading(true);
+        if (isMounted) setLoading(true);
         return;
       }
 
       if (!userProfile) {
-        console.warn('UserContext: No userProfile from AuthContext after loading completed. User may not be authenticated or profile failed to load.');
-        console.log('UserContext: No userProfile, clearing user state');
-        setUser(null);
-        setIsAuthenticated(false);
-        setLoading(false);
+        if (isMounted) {
+          setUser(null);
+          setIsAuthenticated(false);
+          setLoading(false);
+        }
         return;
       }
 
-      if (userProfile) {
-        try {
-          console.log('UserContext: Loading user profile data:', {
-            id: userProfile?.id,
-            email: userProfile?.email,
-            full_name: userProfile?.full_name,
-            organization_id: userProfile?.organization_id,
-            role_id: userProfile?.role_id
-          });
+      try {
+        const profileId = userProfile?.id || userProfile?.userId;
+        const profileEmail = userProfile?.email;
+        const profileFullName = userProfile?.full_name || userProfile?.fullName;
+        const profileOrgId = userProfile?.organization_id || userProfile?.organizationId;
+        const profileRoleId = userProfile?.role_id || userProfile?.roleId;
+        // Use roleName and permissions already parsed in AuthContext from the profile response
+        const profileRoleName = userProfile?.roleName || userProfile?.role_name || null;
+        const profilePermissions = Array.isArray(userProfile?.permissions) ? userProfile?.permissions : [];
 
-          // Fetch organization name
-          let organizationName = 'ComplianceHub';
-          let brandingConfig = null;
-          if (userProfile?.organization_id) {
-            const { data: orgData, error: orgError } = await supabase
-              ?.from('organizations')
-              ?.select('name')
-              ?.eq('id', userProfile?.organization_id)
-              ?.single();
-            
-            if (orgError) {
-              console.error('Error fetching organization:', orgError);
-            } else if (orgData?.name) {
-              organizationName = orgData?.name;
-              console.log('UserContext: Organization name loaded:', organizationName);
-            } else {
-              console.warn('UserContext: Organization data returned but no name field');
-            }
-
-            // Fetch branding configuration
-            const { data: brandingData, error: brandingError } = await supabase
-              ?.from('branding_config')
-              ?.select('*')
-              ?.eq('organization_id', userProfile?.organization_id)
-              ?.single();
-            
-            if (brandingError) {
-              console.error('Error fetching branding config:', brandingError);
-            } else if (brandingData) {
-              brandingConfig = brandingData;
-              console.log('UserContext: Branding config loaded:', brandingConfig);
-            }
-          } else {
-            console.warn('UserContext: No organization_id in userProfile');
+        // Fetch organization and branding via REST API
+        let organizationName = userProfile?.organizationName || userProfile?.organization_name || 'ComplianceHub';
+        let brandingConfig = null;
+        if (profileOrgId) {
+          try {
+            const orgResponse = await apiClient?.get(`/api/organizations/${profileOrgId}`, {
+              signal: controller?.signal
+            });
+            if (!isMounted) return;
+            const orgData = orgResponse?.data;
+            if (orgData?.name) organizationName = orgData?.name;
+            if (orgData?.branding) brandingConfig = orgData?.branding;
+          } catch (error) {
+            if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+            console.error('Error fetching organization:', error?.message);
+            // Fallback: continue with organizationName from profile; no toast needed as it's non-critical
           }
+        } else {
+          console.warn('UserContext: No organization_id in userProfile');
+        }
 
-          // Fetch role name
-          let roleName = null;
-          if (userProfile?.role_id) {
-            const { data: roleData, error: roleError } = await supabase
-              ?.from('roles')
-              ?.select('role_name')
-              ?.eq('id', userProfile?.role_id)
-              ?.single();
-            
-            if (roleError) {
-              console.error('Error fetching role:', roleError);
-            } else if (roleData?.role_name) {
-              roleName = roleData?.role_name;
-              console.log('UserContext: Role name loaded:', roleName);
+        if (!isMounted) return;
+
+        // Use roleName from profile; only fetch from API if not already available
+        let roleName = profileRoleName;
+        if (!roleName && profileRoleId) {
+          try {
+            const roleResponse = await apiClient?.get(`/api/roles/${profileRoleId}`, {
+              signal: controller?.signal
+            });
+            if (!isMounted) return;
+            const roleData = roleResponse?.data;
+            if (roleData?.role_name || roleData?.roleName) {
+              roleName = roleData?.role_name || roleData?.roleName;
             }
+          } catch (error) {
+            if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+            console.error('Error fetching role:', error?.message);
+            toast?.warning?.('Could not load role information. Displaying with limited role details.');
+            // Fallback: roleName stays null — user can still operate with reduced info
           }
+        }
 
-          // Fetch role permissions
-          let permissions = [];
-          if (userProfile?.role_id) {
-            const { data: permissionsData, error: permissionsError } = await supabase
-              ?.from('role_permissions')
-              ?.select('module, action')
-              ?.eq('role_id', userProfile?.role_id);
-            
-            if (permissionsError) {
-              console.error('Error fetching permissions:', permissionsError);
-            } else if (permissionsData && permissionsData?.length > 0) {
+        if (!isMounted) return;
+
+        // Use permissions from profile; only fetch from API if not already available
+        let permissions = profilePermissions;
+        if (permissions?.length === 0 && profileRoleId) {
+          try {
+            const permResponse = await apiClient?.get(`/api/roles/${profileRoleId}/permissions`, {
+              signal: controller?.signal
+            });
+            if (!isMounted) return;
+            const permissionsData = permResponse?.data;
+            if (permissionsData && permissionsData?.length > 0) {
               permissions = permissionsData?.map(p => `${p?.module}.${p?.action}`);
-              console.log('UserContext: Permissions loaded:', permissions?.length, 'permissions');
-            } else {
-              console.warn('UserContext: No permissions found for role_id:', userProfile?.role_id);
             }
+          } catch (error) {
+            if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+            console.error('Error fetching permissions:', error?.message);
+            toast?.error?.('Failed to load permissions. Some features may be restricted. Please refresh the page.');
+            // Fallback: permissions stays empty array — access-restricted UI will handle gating
           }
+        }
 
-          const mappedUser = {
-            userId: userProfile?.id,
-            organizationId: userProfile?.organization_id,
-            roleId: userProfile?.role_id,
-            name: userProfile?.full_name || 'User',
-            email: userProfile?.email,
-            roleName: roleName,
-            permissions: permissions,
-            branding: {
-              primaryColor: brandingConfig?.primary_color || '#1E3A5F',
-              secondaryColor: brandingConfig?.secondary_color || '#4A6B8A',
-              accentColor: '#B87333',
-              logoUrl: brandingConfig?.logo_url || null,
-              organizationName: brandingConfig?.display_name || organizationName
-            }
-          };
-          
-          console.log('UserContext: Setting user state with:', {
-            name: mappedUser?.name,
-            organizationName: mappedUser?.branding?.organizationName,
-            organizationId: mappedUser?.organizationId,
-            roleName: mappedUser?.roleName
-          });
+        if (!isMounted) return;
 
+        const mappedUser = {
+          userId: profileId,
+          organizationId: profileOrgId,
+          roleId: profileRoleId,
+          name: profileFullName || 'User',
+          email: profileEmail,
+          roleName: roleName,
+          permissions: permissions,
+          branding: {
+            primaryColor: brandingConfig?.primary_color || '#1E3A5F',
+            secondaryColor: brandingConfig?.secondary_color || '#4A6B8A',
+            accentColor: '#B87333',
+            logoUrl: brandingConfig?.logo_url || null,
+            organizationName: brandingConfig?.display_name || organizationName
+          }
+        };
+
+        if (isMounted) {
           setUser(mappedUser);
           setIsAuthenticated(true);
-        } catch (error) {
-          console.error('Error fetching user details:', error);
         }
-      } else {
-        console.log('UserContext: No userProfile, clearing user state');
-        setUser(null);
-        setIsAuthenticated(false);
+      } catch (error) {
+        if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+        console.error('Error fetching user details:', error);
+        toast?.error?.('Failed to load user details. Please refresh the page or log in again.');
+        if (isMounted) {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     fetchUserDetails();
+
+    return () => {
+      isMounted = false;
+      controller?.abort();
+    };
   }, [userProfile, authLoading, profileLoading]);
 
   const hasPermission = (permission) => {
-    return user?.permissions?.includes(permission) || false;
+    if (!user?.permissions?.length) return false;
+    // Direct match (e.g. 'VIEW_DATASETS')
+    if (user?.permissions?.includes(permission)) return true;
+    // FULL_ACCESS grants everything
+    if (user?.permissions?.includes('FULL_ACCESS')) return true;
+    // Map dot-notation permission keys used in the dashboard to API uppercase strings
+    const permissionMap = {
+      'datasets.view_count': ['VIEW_DATASETS', 'VIEW_DASHBOARD'],
+      'cases.view_count': ['VIEW_CASES', 'VIEW_DASHBOARD'],
+      'rules.view_count': ['VIEW_RULES', 'VIEW_DASHBOARD'],
+      'reporting.view_count': ['VIEW_REPORTING', 'VIEW_DASHBOARD'],
+      'submissions.view_count': ['VIEW_SUBMISSIONS', 'VIEW_DASHBOARD'],
+      'enrichment.view_count': ['VIEW_ENRICHMENT', 'VIEW_DASHBOARD'],
+      'users.view_count': ['VIEW_USERS', 'VIEW_ADMIN_METRICS'],
+      'roles.view_count': ['VIEW_ROLES', 'VIEW_ADMIN_METRICS'],
+      'sessions.view_count': ['VIEW_ADMIN_METRICS'],
+      'ldap.view_count': ['VIEW_AD_CONFIG', 'MANAGE_AD_CONFIG'],
+      'reports.view_count': ['VIEW_REPORTING', 'VIEW_DASHBOARD'],
+    };
+    const mapped = permissionMap?.[permission];
+    if (mapped) {
+      return mapped?.some(p => user?.permissions?.includes(p));
+    }
+    return false;
   };
 
   const hasAnyPermission = (permissions) => {
@@ -171,8 +184,7 @@ export const UserContextProvider = ({ children }) => {
   };
 
   /**
-   * Force-refresh permissions from Supabase, bypassing any cache.
-   * Call this on screens that rely on recently-migrated permissions.
+   * Force-refresh permissions from REST API, bypassing any cache.
    * @returns {Promise<string[]>} Updated permissions array
    */
   const refreshPermissions = async () => {
@@ -181,16 +193,22 @@ export const UserContextProvider = ({ children }) => {
       return [];
     }
 
-    const freshPermissions = await permissionService?.refreshUserPermissions(user?.roleId);
+    try {
+      const freshPermissions = await permissionService?.refreshUserPermissions(user?.roleId);
 
-    if (freshPermissions?.length > 0) {
-      setUser(prev => ({
-        ...prev,
-        permissions: freshPermissions
-      }));
+      if (freshPermissions?.length > 0) {
+        setUser(prev => ({
+          ...prev,
+          permissions: freshPermissions
+        }));
+      }
+
+      return freshPermissions;
+    } catch (error) {
+      console.error('UserContext.refreshPermissions: Failed to refresh permissions:', error?.message);
+      toast?.error?.('Failed to refresh permissions. Please reload the page.');
+      return user?.permissions || [];
     }
-
-    return freshPermissions;
   };
 
   const value = {

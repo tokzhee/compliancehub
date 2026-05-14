@@ -20,6 +20,7 @@ import { SkeletonTable } from '../../components/ui/SkeletonLoader';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { GridSkeleton } from '../../components/ui/SkeletonLoader';
 import Icon from '../../components/AppIcon';
+import { logActivity } from '../../services/activityService';
 
 
 
@@ -167,6 +168,12 @@ const DatasetManagement = () => {
           resolve();
         }, 2000);
       });
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'dataset_uploaded',
+        'dataset_management'
+      );
       toast?.success(`Dataset "${formData?.datasetName}" uploaded successfully`);
     } catch (error) {
       console.error('Upload error:', error);

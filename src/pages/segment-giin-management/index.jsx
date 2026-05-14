@@ -14,6 +14,7 @@ import ViewDetailsModal from './components/ViewDetailsModal';
 import { segmentGiinService } from '../../services/segmentGiinService';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonGrid } from '../../components/ui/SkeletonLoader';
+import { logActivity } from '../../services/activityService';
 
 
 const SegmentGiinManagement = () => {
@@ -102,6 +103,12 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'segment_giin_created',
+        'segment_giin_management'
+      );
       showToast('Segment GIIN configuration created successfully', 'success');
       await fetchConfigurations();
       setIsCreateModalOpen(false);
@@ -125,6 +132,12 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'segment_giin_updated',
+        'segment_giin_management'
+      );
       showToast('Segment GIIN configuration updated successfully', 'success');
       await fetchConfigurations();
       setIsEditModalOpen(false);
@@ -148,6 +161,12 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'segment_giin_deleted',
+        'segment_giin_management'
+      );
       showToast('Segment GIIN configuration deleted successfully', 'success');
       await fetchConfigurations();
     } catch (err) {
@@ -165,6 +184,12 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'segment_giin_submitted_for_approval',
+        'segment_giin_management'
+      );
       showToast('Configuration submitted for approval successfully', 'success');
       await fetchConfigurations();
     } catch (err) {
@@ -202,6 +227,12 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'segment_giin_approved',
+        'segment_giin_management'
+      );
       showToast('Configuration approved successfully', 'success');
       await fetchConfigurations();
       setIsApprovalModalOpen(false);
@@ -232,6 +263,12 @@ const SegmentGiinManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'segment_giin_rejected',
+        'segment_giin_management'
+      );
       showToast('Configuration rejected successfully', 'success');
       await fetchConfigurations();
       setIsApprovalModalOpen(false);

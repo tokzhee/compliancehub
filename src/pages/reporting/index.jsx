@@ -17,6 +17,7 @@ import { reportingService } from '../../services/reportingService';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonTable, SkeletonStatCard } from '../../components/ui/SkeletonLoader';
 import Icon from '../../components/AppIcon';
+import { logActivity } from '../../services/activityService';
 
 
 const Reporting = () => {
@@ -87,6 +88,12 @@ const Reporting = () => {
       const jobs = await reportingService?.getReportingJobs(user?.organizationId);
       setReportingJobs(jobs);
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'report_generated',
+        'reporting'
+      );
       setShowGenerateModal(false);
     } catch (err) {
       console.error('Error generating report:', err);
@@ -105,6 +112,13 @@ const Reporting = () => {
       // Refresh audit summary
       const summary = await reportingService?.getAuditSummary(user?.organizationId);
       setAuditSummary(summary);
+
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'report_approved',
+        'reporting'
+      );
     } catch (err) {
       console.error('Error approving report:', err);
       alert('Failed to approve report. Please try again.');

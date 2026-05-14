@@ -21,6 +21,7 @@ import { roleService } from '../../services/roleService';
 import { supabase } from '../../lib/supabase';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { useToast } from '../../contexts/ToastContext';
+import { logActivity } from '../../services/activityService';
 
 
 const UserManagement = () => {
@@ -332,6 +333,12 @@ const UserManagement = () => {
         return;
       }
 
+      await logActivity(
+        currentUser?.userId,
+        currentUser?.organizationId,
+        'user_created',
+        `user_management`
+      );
       toast?.success(`User "${newUserData?.username}" created successfully`);
     } catch (error) {
       console.error('Create user error:', error);
@@ -356,6 +363,12 @@ const UserManagement = () => {
         return;
       }
 
+      await logActivity(
+        currentUser?.userId,
+        currentUser?.organizationId,
+        'user_role_updated',
+        `user_management`
+      );
       toast?.success(`User "${user?.username}" updated successfully`);
     } catch (error) {
       console.error('Update user error:', error);
@@ -373,6 +386,12 @@ const UserManagement = () => {
 
       if (result) {
         const statusMessage = newStatus === 'suspended' ? 'User suspended successfully' : 'User activated successfully';
+        await logActivity(
+          currentUser?.userId,
+          currentUser?.organizationId,
+          newStatus === 'suspended' ? 'user_suspended' : 'user_activated',
+          `user_management`
+        );
         toast?.success(statusMessage);
         setUsers(prevUsers => 
           prevUsers?.map(u => 

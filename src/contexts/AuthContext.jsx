@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
 import apiClient from '../lib/apiClient';
+import { useToast } from './ToastContext';
 
 const AuthContext = createContext({})
 
@@ -12,93 +12,104 @@ export const useAuth = () => {
   return context
 }
 
-const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || '';
-const useRestApi = !!API_BASE_URL;
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
   const [authMethod, setAuthMethod] = useState(null)
+  const toast = useToast();
 
-  // Load profile via REST API
-  const loadProfileFromApi = async (userId) => {
+  const loadProfileFromApi = async (userId, signal) => {
     if (!userId) return;
     setProfileLoading(true);
     try {
-      const response = await apiClient?.get('/api/auth/profile', { params: { userId } });
+      const response = await apiClient?.get('/api/auth/profile', {
+        params: { userId },
+        ...(signal ? { signal } : {})
+      });
       const data = response?.data;
+
       if (data) {
-        setUserProfile(data);
+        // API returns an array — always use index 0
+        const raw = Array.isArray(data) ? data?.[0] : (data?.data || data?.user || data?.profile || data?.result || data?.payload || data);
+
+        if (!raw) {
+          console.warn('AuthContext [loadProfileFromApi]: Could not extract profile object from response');
+          toast?.warning?.('User profile data could not be loaded. Some features may be limited.');
+          return;
+        }
+
+        // Parse permissionList comma-separated string into array
+        const permissionList = raw?.permissionList || raw?.permission_list || '';
+        const permissions = typeof permissionList === 'string' && permissionList?.length > 0 ? permissionList?.split(',')?.map(p => p?.trim())?.filter(Boolean)
+          : (Array.isArray(permissionList) ? permissionList : []);
+
+        const normalized = {
+          // Spread raw fields so nothing is lost
+          ...raw,
+          // Canonical id field
+          id: raw?.userId || raw?.id || userId,
+          userId: raw?.userId || raw?.id || userId,
+          // Name fields
+          fullName: raw?.fullName || raw?.full_name || '',
+          full_name: raw?.full_name || raw?.fullName || '',
+          // Email
+          email: raw?.email || '',
+          // Username
+          username: raw?.username || '',
+          // Organization
+          organizationId: raw?.organizationId || raw?.organization_id || '',
+          organization_id: raw?.organization_id || raw?.organizationId || '',
+          organizationName: raw?.organizationName || raw?.organization_name || '',
+          organizationCode: raw?.organizationCode || raw?.organization_code || '',
+          // Role
+          roleId: raw?.roleId || raw?.role_id || '',
+          role_id: raw?.role_id || raw?.roleId || '',
+          roleName: raw?.roleName || raw?.role_name || '',
+          roleDescription: raw?.roleDescription || raw?.role_description || '',
+          // Permissions
+          permissions,
+          permissionList: raw?.permissionList || raw?.permission_list || '',
+          // Status
+          isActive: raw?.isActive ?? raw?.is_active ?? true,
+        };
+
+        setUserProfile(normalized);
       }
     } catch (error) {
+      if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
       console.error('AuthContext: REST profile load error:', error?.message);
+      toast?.error?.('Failed to load user profile. Please refresh or log in again.');
     } finally {
       setProfileLoading(false);
     }
   };
 
-  // Load profile via Supabase (fallback)
-  const loadProfileFromSupabase = async (userId) => {
-    if (!userId) return;
-    setProfileLoading(true);
-    try {
-      const { data, error } = await supabase?.from('user_profiles')?.select('*')?.eq('id', userId)?.single();
-      if (error) {
-        console.error('AuthContext: Profile load error:', error);
-      }
-      if (data) {
-        setUserProfile(data);
-      }
-    } catch (error) {
-      console.error('AuthContext: Profile load exception:', error);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const profileOperations = {
-    async load(userId) {
-      if (useRestApi) {
-        await loadProfileFromApi(userId);
-      } else {
-        await loadProfileFromSupabase(userId);
-      }
-    },
-    clear() {
-      setUserProfile(null);
-      setProfileLoading(false);
-    }
-  };
-
-  // Restore session from REST API
   const restoreApiSession = async () => {
     const token = localStorage.getItem('access_token');
     const refreshToken = localStorage.getItem('refresh_token');
     const storedUserId = localStorage.getItem('user_id');
 
-    if (!token && !refreshToken) {
+    if (!token || !storedUserId) {
       setLoading(false);
       return;
     }
 
     try {
-      if (storedUserId) {
-        const response = await apiClient?.get('/api/auth/session', {
-          params: { userId: storedUserId, refreshToken }
-        });
-        const sessionData = response?.data;
-        if (sessionData) {
-          const userData = {
-            id: sessionData?.userId || storedUserId,
-            email: sessionData?.email,
-            name: sessionData?.fullName,
-          };
-          setUser(userData);
-          setAuthMethod('api');
-          await loadProfileFromApi(userData?.id);
-        }
+      const response = await apiClient?.get('/api/auth/session', {
+        params: { userId: storedUserId, refreshToken }
+      });
+      const sessionData = response?.data;
+      if (sessionData) {
+        const userData = {
+          id: sessionData?.userId || storedUserId,
+          email: sessionData?.email,
+          name: sessionData?.fullName,
+        };
+        setUser(userData);
+        setAuthMethod('api');
+        await loadProfileFromApi(userData?.id);
       }
     } catch (error) {
       console.error('AuthContext: Session restore error:', error?.message);
@@ -111,44 +122,75 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    if (useRestApi) {
-      restoreApiSession();
-    } else {
-      // Supabase auth flow
-      supabase?.auth?.getSession()?.then(({ data: { session } }) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
-        if (session?.user) {
-          setAuthMethod('database');
-          loadProfileFromSupabase(session?.user?.id);
-        }
-      });
+    let isMounted = true;
+    const controller = new AbortController();
 
-      const { data: { subscription } } = supabase?.auth?.onAuthStateChange((event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
-        if (session?.user) {
-          setAuthMethod('database');
-          loadProfileFromSupabase(session?.user?.id);
-        } else {
-          setAuthMethod(null);
-          profileOperations?.clear();
-        }
-      });
+    const restoreApiSessionSafe = async () => {
+      const token = localStorage.getItem('access_token');
+      const refreshToken = localStorage.getItem('refresh_token');
+      const storedUserId = localStorage.getItem('user_id');
 
-      return () => subscription?.unsubscribe();
-    }
+      if (!token || !storedUserId) {
+        if (isMounted) setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await apiClient?.get('/api/auth/session', {
+          params: { userId: storedUserId, refreshToken },
+          signal: controller?.signal
+        });
+        if (!isMounted) return;
+        const sessionData = response?.data;
+        if (sessionData) {
+          const userData = {
+            id: sessionData?.userId || storedUserId,
+            email: sessionData?.email,
+            name: sessionData?.fullName,
+          };
+          setUser(userData);
+          setAuthMethod('api');
+          await loadProfileFromApi(userData?.id, controller?.signal);
+        }
+      } catch (error) {
+        if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+        console.error('AuthContext: Session restore error:', error?.message);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_id');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    restoreApiSessionSafe();
+
+    return () => {
+      isMounted = false;
+      controller?.abort();
+    };
   }, []);
 
-  // Sign in via REST API
-  const signInWithApi = async (username, password) => {
+  const signIn = async (username, password) => {
     try {
       const response = await apiClient?.post('/api/auth/login', { username, password });
       const data = response?.data;
 
-      const accessToken = data?.accessToken || data?.token;
-      const refreshToken = data?.refreshToken;
-      const userId = data?.userId || data?.user?.id;
+      const accessToken = data?.access_token || data?.accessToken || data?.token;
+      const refreshToken = data?.refresh_token || data?.refreshToken;
+
+      let userId = data?.userId || data?.user?.id;
+      if (!userId && accessToken) {
+        try {
+          const payload = JSON.parse(atob(accessToken?.split('.')?.[1]));
+          userId = payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
+            || payload?.sub
+            || payload?.userId
+            || payload?.user_id;
+        } catch (e) {
+          console.error('AuthContext: Failed to decode JWT payload:', e?.message);
+        }
+      }
 
       if (accessToken) {
         localStorage.setItem('access_token', accessToken);
@@ -180,44 +222,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Sign in via Supabase (fallback)
-  const signIn = async (email, password) => {
-    if (useRestApi) {
-      return signInWithApi(email, password);
-    }
-    try {
-      const { data, error } = await supabase?.auth?.signInWithPassword({ email, password });
-      if (!error) {
-        setAuthMethod('database');
-      }
-      return { data, error };
-    } catch (error) {
-      return { error: { message: 'Network error. Please try again.' } };
-    }
-  };
-
   const signOut = async () => {
     try {
-      if (useRestApi) {
-        try {
-          await apiClient?.post('/api/auth/logout');
-        } catch (e) {
-          // Ignore logout API errors - clear local state regardless
-        }
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_id');
-        setUser(null);
-        setAuthMethod(null);
-        profileOperations?.clear();
-        return { error: null };
+      try {
+        await apiClient?.post('/api/auth/logout');
+      } catch (e) {
+        // Ignore logout API errors - clear local state regardless
       }
-
-      const { error } = await supabase?.auth?.signOut();
-      if (error) return { error };
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_id');
       setUser(null);
       setAuthMethod(null);
-      profileOperations?.clear();
+      setUserProfile(null);
+      setProfileLoading(false);
       return { error: null };
     } catch (error) {
       return { error: { message: 'Network error. Please try again.' } };
@@ -227,15 +245,10 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (updates) => {
     if (!user) return { error: { message: 'No user logged in' } };
     try {
-      if (useRestApi) {
-        const response = await apiClient?.put(`/api/users/${user?.id}`, updates);
-        const data = response?.data;
-        setUserProfile(data);
-        return { data, error: null };
-      }
-      const { data, error } = await supabase?.from('user_profiles')?.update(updates)?.eq('id', user?.id)?.select()?.single();
-      if (!error) setUserProfile(data);
-      return { data, error };
+      const response = await apiClient?.put(`/api/users/${user?.id}`, updates);
+      const data = response?.data;
+      setUserProfile(data);
+      return { data, error: null };
     } catch (error) {
       return { error: { message: 'Network error. Please try again.' } };
     }
@@ -251,7 +264,7 @@ export const AuthProvider = ({ children }) => {
     updateProfile,
     isAuthenticated: !!user,
     authMethod,
-    useRestApi,
+    useRestApi: true,
   };
 
   return (

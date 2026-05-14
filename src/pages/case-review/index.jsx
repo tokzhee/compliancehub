@@ -20,6 +20,7 @@ import OverrideDecisionModal from './components/OverrideDecisionModal';
 import AssignCaseModal from './components/AssignCaseModal';
 import { caseService } from '../../services/caseService';
 import CaseDetailsModal from './components/CaseDetailsModal';
+import { logActivity } from '../../services/activityService';
 
 
 const CaseReview = () => {
@@ -146,12 +147,24 @@ const CaseReview = () => {
     console.log('Comment submitted:', commentData);
     // In real app: INSERT into case_comments table
     // Then log to user_activity_log
+    logActivity(
+      user?.userId,
+      user?.organizationId,
+      'case_comment_added',
+      `Comment added to case${selectedCase?.id ? ` #${selectedCase?.id}` : ''}`
+    );
   };
 
   const handleSubmitOverride = (overrideData) => {
     console.log('Override submitted:', overrideData);
     // In real app: INSERT into overrides table
     // Then log to user_activity_log
+    logActivity(
+      user?.userId,
+      user?.organizationId,
+      'case_override_submitted',
+      `Override decision submitted for case${selectedCase?.id ? ` #${selectedCase?.id}` : ''}`
+    );
   };
 
   const handleAssignCases = (assignmentData) => {
@@ -159,8 +172,14 @@ const CaseReview = () => {
       console.log('Cases assigned:', assignmentData);
       // In real app: UPDATE fatca_results.assigned_to
       // Then log to user_activity_log
-      
       const caseCount = assignmentData?.caseIds?.length || 0;
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        'cases_assigned',
+        `${caseCount} case${caseCount !== 1 ? 's' : ''} assigned to ${assignmentData?.assigneeId || 'user'}`
+      );
+
       toast?.success(`${caseCount} case${caseCount !== 1 ? 's' : ''} assigned successfully`);
       
       setSelectedCases([]);
@@ -175,8 +194,14 @@ const CaseReview = () => {
       console.log('Bulk status update:', { cases: selectedCases, newStatus });
       // In real app: UPDATE fatca_results.review_status
       // Then log to user_activity_log
-      
       const caseCount = selectedCases?.length || 0;
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        'cases_status_updated',
+        `${caseCount} case${caseCount !== 1 ? 's' : ''} status updated to "${newStatus}"`
+      );
+
       toast?.success(`${caseCount} case${caseCount !== 1 ? 's' : ''} updated to ${newStatus}`);
       
       setSelectedCases([]);

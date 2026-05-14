@@ -25,6 +25,7 @@ import AccessRestricted from '../../components/ui/AccessRestricted';
 import RuleSimulationPanel from './components/RuleSimulationPanel';
 import RuleHistoryTab from './components/RuleHistoryTab';
 import RetireRuleModal from './components/RetireRuleModal';
+import { logActivity } from '../../services/activityService';
 
 
 const RuleManagement = () => {
@@ -252,6 +253,14 @@ const RuleManagement = () => {
 
       toast?.success(`Rule "${formData?.ruleName}" ${isEditMode ? 'updated' : 'created'} successfully`);
 
+      // Log rule create/update activity
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        isEditMode ? 'rule_updated' : 'rule_created',
+        `Rule "${formData?.ruleName}" ${isEditMode ? 'updated' : 'created'} (${selectedRegime})`
+      );
+
       // Refresh rules list
       const fetchedRules = await fatcaCrsRuleService?.getRuleSets(user?.organizationId, {
         ...filters,
@@ -275,6 +284,15 @@ const RuleManagement = () => {
             toast?.error(`Failed to submit "${formData?.ruleName}" for approval: ${submitError?.message || 'Please try again.'}`);
           } else {
             toast?.success(`Rule "${formData?.ruleName}" submitted for approval successfully`);
+
+            // Log submit-for-approval activity
+            logActivity(
+              user?.userId,
+              user?.organizationId,
+              'rule_submitted_for_approval',
+              `Rule "${formData?.ruleName}" submitted for approval (${selectedRegime})`
+            );
+
             // Refresh rules list again to show updated status
             const updatedRules = await fatcaCrsRuleService?.getRuleSets(user?.organizationId, {
               ...filters,
@@ -349,6 +367,14 @@ const RuleManagement = () => {
 
       toast?.success(`Rule "${rule?.ruleName}" submitted for approval successfully`);
 
+      // Log submit-for-approval activity
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        'rule_submitted_for_approval',
+        `Rule "${rule?.ruleName}" submitted for approval (${selectedRegime})`
+      );
+
       // Refresh rules list
       const fetchedRules = await fatcaCrsRuleService?.getRuleSets(user?.organizationId, {
         ...filters,
@@ -380,6 +406,14 @@ const RuleManagement = () => {
         }
         toast?.success(`Rule "${ruleName}" rejected successfully`);
       }
+
+      // Log approval/rejection activity
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        approvalAction === 'approve' ? 'rule_approved' : 'rule_rejected',
+        `Rule "${ruleName}" ${approvalAction === 'approve' ? 'approved' : 'rejected'} (${selectedRegime})`
+      );
 
       // Refresh rules list
       const fetchedRules = await fatcaCrsRuleService?.getRuleSets(user?.organizationId, {
@@ -511,6 +545,14 @@ const RuleManagement = () => {
 
       toast?.success(`Rule "${ruleName}" retired successfully and excluded from active workflows`);
 
+      // Log retirement activity
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        'rule_retired',
+        `Rule "${ruleName}" retired (${selectedRegime}): ${retirementReason || 'No reason provided'}`
+      );
+
       // Refresh rules list
       const fetchedRules = await fatcaCrsRuleService?.getRuleSets(user?.organizationId, {
         ...filters,
@@ -540,6 +582,14 @@ const RuleManagement = () => {
       }
 
       toast?.success(`Rule "${rule?.ruleName}" deleted successfully`);
+
+      // Log deletion activity
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        'rule_deleted',
+        `Rule "${rule?.ruleName}" deleted (${selectedRegime})`
+      );
 
       // Refresh rules list
       const fetchedRules = await fatcaCrsRuleService?.getRuleSets(user?.organizationId, {

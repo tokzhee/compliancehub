@@ -11,10 +11,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
 import { supabase } from '../../lib/supabase';
 import Select from '../../components/ui/Select';
+import { logActivity } from '../../services/activityService';
+import { useUserContext } from '../../contexts/UserContext';
 
 const Resources = () => {
   const { sidebarCollapsed, isSidebarExpanded } = useNavigationContext();
   const { userProfile } = useAuth();
+  const { user } = useUserContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState([]);
   const [resourceSections, setResourceSections] = useState([]);
@@ -155,6 +158,12 @@ const Resources = () => {
 
   const handleEditorSave = () => {
     // Refresh resources list
+    logActivity(
+      user?.userId,
+      user?.organizationId,
+      editingResourceId ? 'resource_updated' : 'resource_created',
+      'resources'
+    );
     fetchResources();
   };
 

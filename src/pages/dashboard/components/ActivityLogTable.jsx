@@ -33,7 +33,11 @@ const ActivityLogTable = ({ activities }) => {
   };
 
   const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
+    if (!timestamp) return 'Unknown';
+    // Normalize SQL Server datetime format: replace space separator with T
+    const normalized = typeof timestamp === 'string' ? timestamp?.replace(' ', 'T') : timestamp;
+    const date = new Date(normalized);
+    if (isNaN(date?.getTime())) return 'Unknown';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);

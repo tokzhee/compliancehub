@@ -28,6 +28,15 @@ const ComplianceStatusCard = ({ status, lastUpdated, reportingYear }) => {
 
   const config = statusConfig?.[status] || statusConfig?.compliant;
 
+  const formatDate = (value) => {
+    if (!value) return '—';
+    // Normalize SQL Server datetime: replace space separator with T
+    const normalized = typeof value === 'string' ? value?.replace(' ', 'T') : value;
+    const date = new Date(normalized);
+    if (isNaN(date?.getTime())) return '—';
+    return date?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div className="bg-card rounded-lg p-4 md:p-6 shadow-elevation-sm border border-border">
       <div className="flex items-start justify-between mb-4">
@@ -57,11 +66,7 @@ const ComplianceStatusCard = ({ status, lastUpdated, reportingYear }) => {
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Last Updated</span>
           <span className="font-medium text-foreground">
-            {new Date(lastUpdated)?.toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              year: 'numeric' 
-            })}
+            {formatDate(lastUpdated)}
           </span>
         </div>
       </div>

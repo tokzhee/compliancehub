@@ -5,27 +5,53 @@ import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Select from '../../components/ui/Select';
 import AppIcon from '../../components/AppIcon';
-import { supabase } from '../../lib/supabase';
+import apiClient from '../../lib/apiClient';
+import { logActivity } from '../../services/activityService';
 
 const Login = () => {
   const navigate = useNavigate();
   const { signIn, signInWithAzureAD, user, loading: authLoading } = useAuth();
   
-  const [authMethod, setAuthMethod] = useState('database'); // 'database' or 'azure_ad'
+  const [authMethod, setAuthMethod] = useState('database');
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
     adConfigId: ''
   });
   
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [authError, setAuthError] = useState(null); // Changed to object: { type, message, canRetry }
+  const [authError, setAuthError] = useState(null);
   const [adConfigurations, setAdConfigurations] = useState([]);
   const [loadingAdConfigs, setLoadingAdConfigs] = useState(false);
   const [brandingConfig, setBrandingConfig] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // Debug panel state
+  const [debugLog, setDebugLog] = useState(null);
+  const [debugExpanded, setDebugExpanded] = useState(true);
+
+  // Detect mixed-content / unreachable API on mount
+  useEffect(() => {
+    const apiBase = import.meta.env?.VITE_API_BASE_URL || '';
+    if (
+      apiBase &&
+      window.location?.protocol === 'https:' && apiBase?.startsWith('http://')
+    ) {
+      setAuthError({
+        type: 'mixed_content',
+        message: 'Cannot connect to the API server. The app is running on HTTPS but the API URL uses HTTP, which browsers block for security.',
+        canRetry: false,
+        icon: 'ShieldOff',
+        instructions: [
+          `API URL: ${apiBase}`,
+          'The server must be accessible over HTTPS (https://) to work from this app',
+          'Contact your administrator to enable HTTPS on the API server or configure a secure proxy'
+        ]
+      });
+    }
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -40,33 +66,13 @@ const Login = () => {
   }, []);
 
   const fetchBrandingConfig = async () => {
-    try {
-      // Fetch Ahlibank branding config
-      const { data: orgData } = await supabase
-        ?.from('organizations')
-        ?.select('id, name')
-        ?.eq('name', 'Ahlibank')
-        ?.single();
-
-      if (orgData?.id) {
-        const { data: brandingData } = await supabase
-          ?.from('branding_config')
-          ?.select('*')
-          ?.eq('organization_id', orgData?.id)
-          ?.single();
-
-        if (brandingData) {
-          setBrandingConfig({
-            logoUrl: brandingData?.logo_url,
-            displayName: brandingData?.display_name || orgData?.name,
-            primaryColor: brandingData?.primary_color,
-            secondaryColor: brandingData?.secondary_color
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching branding config:', err);
-    }
+    // Use local branding immediately — API endpoint is unreliable/unavailable at login time
+    setBrandingConfig({
+      logoUrl: '/assets/images/image-1771788194868.png',
+      displayName: 'Ahlibank',
+      primaryColor: '#1e40af',
+      secondaryColor: '#3b82f6'
+    });
   };
 
   // Fetch AD configurations when AD auth method is selected
@@ -79,22 +85,18 @@ const Login = () => {
   const fetchAdConfigurations = async () => {
     setLoadingAdConfigs(true);
     try {
-      const { data, error } = await supabase
-        ?.from('ad_configurations')
-        ?.select('*')
-        ?.eq('status', 'active')
-        ?.order('config_name', { ascending: true });
-
-      if (!error && data) {
-        setAdConfigurations(data?.map(config => ({
-          value: config?.id,
-          label: config?.config_name,
-          tenantId: config?.tenant_id,
-          clientId: config?.client_id
-        })));
-      }
+      const response = await apiClient?.get('/api/ad-configurations', {
+        params: { status: 'active' }
+      });
+      const data = response?.data || [];
+      setAdConfigurations(data?.map(config => ({
+        value: config?.id,
+        label: config?.config_name || config?.configName,
+        tenantId: config?.tenant_id || config?.tenantId,
+        clientId: config?.client_id || config?.clientId
+      })));
     } catch (err) {
-      console.error('Error fetching AD configurations:', err);
+      console.error('Error fetching AD configurations:', err?.message);
     } finally {
       setLoadingAdConfigs(false);
     }
@@ -104,21 +106,15 @@ const Login = () => {
     const newErrors = {};
 
     if (authMethod === 'database') {
-      // Email validation
-      if (!formData?.email) {
-        newErrors.email = 'Email is required';
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/?.test(formData?.email)) {
-        newErrors.email = 'Please enter a valid email address';
+      if (!formData?.username) {
+        newErrors.username = 'Username is required';
       }
-
-      // Password validation
       if (!formData?.password) {
         newErrors.password = 'Password is required';
       } else if (formData?.password?.length < 6) {
         newErrors.password = 'Password must be at least 6 characters';
       }
     } else if (authMethod === 'azure_ad') {
-      // AD configuration validation
       if (!formData?.adConfigId) {
         newErrors.adConfigId = 'Please select an AD configuration';
       }
@@ -130,11 +126,9 @@ const Login = () => {
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear field error when user starts typing
     if (errors?.[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
-    // Clear auth error when user modifies form
     if (authError) {
       setAuthError(null);
       setRetryCount(0);
@@ -147,8 +141,49 @@ const Login = () => {
 
     const errorMessage = error?.message?.toLowerCase() || '';
     const errorCode = error?.code || error?.status;
+    const apiBase = import.meta.env?.VITE_API_BASE_URL || '';
 
-    // Network-related errors
+    if (
+      apiBase?.startsWith('http://') &&
+      window.location?.protocol === 'https:' && (errorMessage?.includes('network') || errorMessage?.includes('fetch') || errorMessage?.includes('failed'))
+    ) {
+      return {
+        type: 'mixed_content',
+        message: 'Cannot connect: the API server uses HTTP but this app runs on HTTPS. Browsers block this for security.',
+        canRetry: false,
+        icon: 'ShieldOff',
+        instructions: [
+          `API URL configured: ${apiBase}`,
+          'The API server must support HTTPS to work from a secure (HTTPS) app',
+          'Contact your administrator to enable HTTPS on the API server'
+        ]
+      };
+    }
+
+    if (
+      apiBase?.startsWith('https://') &&
+      (errorMessage?.includes('network') ||
+        errorMessage?.includes('failed') ||
+        errorMessage?.includes('fetch') ||
+        errorCode === 'ERR_CERT_AUTHORITY_INVALID' ||
+        errorCode === 'ERR_CERT_COMMON_NAME_INVALID' ||
+        errorCode === 'ERR_SSL_PROTOCOL_ERROR' ||
+        errorCode === 'NETWORK_ERROR')
+    ) {
+      return {
+        type: 'ssl_cert',
+        message: 'Cannot connect to the API — the server may have an invalid or self-signed SSL certificate.',
+        canRetry: true,
+        icon: 'ShieldAlert',
+        apiUrl: apiBase,
+        instructions: [
+          `API URL: ${apiBase}`,
+          'Since this is a dev environment, the API certificate may not be trusted by your browser.',
+          'Click the button below to open the API in a new tab and accept the certificate warning, then return here and try again.'
+        ]
+      };
+    }
+
     if (
       errorMessage?.includes('network') ||
       errorMessage?.includes('fetch') ||
@@ -156,8 +191,7 @@ const Login = () => {
       errorMessage?.includes('connection') ||
       errorMessage?.includes('econnrefused') ||
       errorCode === 'NETWORK_ERROR' ||
-      errorCode === 'ETIMEDOUT' ||
-      !navigator?.onLine
+      errorCode === 'ETIMEDOUT'
     ) {
       return {
         type: 'network',
@@ -172,7 +206,6 @@ const Login = () => {
       };
     }
 
-    // Invalid credentials
     if (
       errorMessage?.includes('invalid login credentials') ||
       errorMessage?.includes('invalid email or password') ||
@@ -193,7 +226,6 @@ const Login = () => {
       };
     }
 
-    // Account lockout / too many attempts
     if (
       errorMessage?.includes('too many') ||
       errorMessage?.includes('rate limit') ||
@@ -215,7 +247,6 @@ const Login = () => {
       };
     }
 
-    // Email not confirmed
     if (
       errorMessage?.includes('email not confirmed') ||
       errorMessage?.includes('email verification') ||
@@ -234,7 +265,6 @@ const Login = () => {
       };
     }
 
-    // User not found
     if (
       errorMessage?.includes('user not found') ||
       errorMessage?.includes('no user') ||
@@ -253,7 +283,6 @@ const Login = () => {
       };
     }
 
-    // Account suspended/disabled
     if (
       errorMessage?.includes('suspended') ||
       errorMessage?.includes('disabled') ||
@@ -273,7 +302,6 @@ const Login = () => {
       };
     }
 
-    // Generic error
     return {
       type: 'generic',
       message: error?.message || 'An unexpected error occurred. Please try again.',
@@ -286,23 +314,17 @@ const Login = () => {
     };
   };
 
-  // Exponential backoff calculation
   const calculateBackoffDelay = (attempt) => {
-    // Base delay: 1 second, max delay: 16 seconds
     const baseDelay = 1000;
     const maxDelay = 16000;
-    const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-    return delay;
+    return Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
   };
 
-  // Retry login with exponential backoff
   const handleRetry = async () => {
     if (!authError?.canRetry) return;
 
     setIsRetrying(true);
     const delay = calculateBackoffDelay(retryCount);
-
-    // Show retry delay to user
     const retryDelaySeconds = Math.ceil(delay / 1000);
     setAuthError(prev => ({
       ...prev,
@@ -310,11 +332,8 @@ const Login = () => {
     }));
 
     await new Promise(resolve => setTimeout(resolve, delay));
-
     setRetryCount(prev => prev + 1);
     setIsRetrying(false);
-    
-    // Retry the login
     await handleSubmit(null, true);
   };
 
@@ -326,11 +345,8 @@ const Login = () => {
       setRetryCount(0);
     }
 
-    // Handle Azure AD authentication
     if (authMethod === 'azure_ad') {
-      if (!validateForm()) {
-        return;
-      }
+      if (!validateForm()) return;
 
       setIsSubmitting(true);
       try {
@@ -360,7 +376,6 @@ const Login = () => {
           return;
         }
 
-        // Success - navigate to dashboard
         navigate('/dashboard');
       } catch (error) {
         console.error('Azure AD login error:', error);
@@ -370,15 +385,39 @@ const Login = () => {
       return;
     }
 
-    // Handle database authentication
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
 
+    const apiBase = import.meta.env?.VITE_API_BASE_URL || '(not set)';
+    const loginUrl = `${apiBase}/api/auth/login`;
+    const requestPayload = { username: formData?.username, password: '***hidden***' };
+    const debugEntry = {
+      timestamp: new Date()?.toISOString(),
+      apiBase,
+      loginUrl,
+      requestPayload,
+      response: null,
+      error: null,
+      rawError: null,
+    };
+    setDebugLog({ ...debugEntry, status: 'pending' });
+
     try {
-      const { data, error } = await signIn(formData?.email, formData?.password);
+      const { data, error } = await signIn(formData?.username, formData?.password);
+
+      setDebugLog(prev => ({
+        ...prev,
+        status: error ? 'error' : 'success',
+        response: data ? JSON.stringify(data, null, 2) : null,
+        error: error ? {
+          message: error?.message,
+          code: error?.code || error?.status,
+          name: error?.name,
+          stack: error?.stack,
+        } : null,
+        rawError: error ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2) : null,
+      }));
 
       if (error) {
         const classifiedError = classifyError(error);
@@ -387,11 +426,44 @@ const Login = () => {
         return;
       }
 
-      // Success - AuthContext will handle user state and UserContext will fetch profile
-      // Navigation will happen via useEffect when user state updates
+      try {
+        const storedUserId = localStorage.getItem('user_id');
+        if (storedUserId) {
+          await logActivity(
+            storedUserId,
+            null,
+            'login',
+            `User logged in via ${authMethod === 'azure_ad' ? 'Azure AD' : 'username/password'}`
+          );
+        }
+      } catch {
+        // Non-critical
+      }
+
       setRetryCount(0);
     } catch (error) {
       console.error('Login error:', error);
+
+      setDebugLog(prev => ({
+        ...prev,
+        status: 'thrown',
+        error: {
+          message: error?.message,
+          code: error?.code || error?.status,
+          name: error?.name,
+          stack: error?.stack,
+        },
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+        axiosDetails: error?.isAxiosError ? {
+          url: error?.config?.url,
+          method: error?.config?.method,
+          baseURL: error?.config?.baseURL,
+          responseStatus: error?.response?.status,
+          responseData: JSON.stringify(error?.response?.data, null, 2),
+          responseHeaders: JSON.stringify(error?.response?.headers, null, 2),
+        } : null,
+      }));
+
       setAuthError(classifyError(error));
       setIsSubmitting(false);
     }
@@ -401,7 +473,7 @@ const Login = () => {
     setAuthMethod(method);
     setAuthError(null);
     setErrors({});
-    setFormData({ email: '', password: '', adConfigId: '' });
+    setFormData({ username: '', password: '', adConfigId: '' });
     setRetryCount(0);
   };
 
@@ -422,14 +494,12 @@ const Login = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            {/* Logo - Show image if available, fallback to icon */}
             {brandingConfig?.logoUrl ? (
               <img
                 src={brandingConfig?.logoUrl}
                 alt={`${brandingConfig?.displayName || 'Organization'} logo`}
                 className="h-16 w-auto object-contain"
                 onError={(e) => {
-                  // Fallback to icon if image fails to load
                   e.target.style.display = 'none';
                   e.target.nextElementSibling.style.display = 'flex';
                 }}
@@ -484,6 +554,8 @@ const Login = () => {
           {authError && (
             <div className={`mb-6 p-4 rounded-lg border-2 ${
               authError?.type === 'network' ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-800' :
+              authError?.type === 'mixed_content' ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800' :
+              authError?.type === 'ssl_cert' ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-400 dark:border-yellow-700' :
               authError?.type === 'account_locked' ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800' :
               authError?.type === 'invalid_credentials'? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800' : 'bg-error/10 border-error/20'
             }`}>
@@ -493,6 +565,8 @@ const Login = () => {
                   size={22} 
                   className={`flex-shrink-0 mt-0.5 ${
                     authError?.type === 'network' ? 'text-orange-600 dark:text-orange-400' :
+                    authError?.type === 'mixed_content' ? 'text-red-600 dark:text-red-400' :
+                    authError?.type === 'ssl_cert' ? 'text-yellow-600 dark:text-yellow-400' :
                     authError?.type === 'account_locked' ? 'text-red-600 dark:text-red-400' :
                     authError?.type === 'invalid_credentials'? 'text-amber-600 dark:text-amber-400' : 'text-error'
                   }`}
@@ -500,6 +574,8 @@ const Login = () => {
                 <div className="flex-1">
                   <p className={`text-sm font-semibold mb-1 ${
                     authError?.type === 'network' ? 'text-orange-900 dark:text-orange-100' :
+                    authError?.type === 'mixed_content' ? 'text-red-900 dark:text-red-100' :
+                    authError?.type === 'ssl_cert' ? 'text-yellow-900 dark:text-yellow-100' :
                     authError?.type === 'account_locked' ? 'text-red-900 dark:text-red-100' :
                     authError?.type === 'invalid_credentials'? 'text-amber-900 dark:text-amber-100' : 'text-error'
                   }`}>
@@ -508,6 +584,8 @@ const Login = () => {
                   {authError?.instructions && authError?.instructions?.length > 0 && (
                     <ul className={`text-xs space-y-1 mt-2 ${
                       authError?.type === 'network' ? 'text-orange-700 dark:text-orange-300' :
+                      authError?.type === 'mixed_content' ? 'text-red-700 dark:text-red-300' :
+                      authError?.type === 'ssl_cert' ? 'text-yellow-700 dark:text-yellow-300' :
                       authError?.type === 'account_locked' ? 'text-red-700 dark:text-red-300' :
                       authError?.type === 'invalid_credentials'? 'text-amber-700 dark:text-amber-300' : 'text-error/80'
                     }`}>
@@ -521,7 +599,37 @@ const Login = () => {
                   )}
                 </div>
               </div>
-              {authError?.canRetry && !isRetrying && (
+              {authError?.type === 'ssl_cert' && authError?.apiUrl && (
+                <div className="mt-3 space-y-2">
+                  <a
+                    href={authError?.apiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium transition-colors"
+                  >
+                    <AppIcon name="ExternalLink" size={16} />
+                    Open API in new tab to accept certificate
+                  </a>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 text-center">
+                    After accepting the certificate warning in the new tab, return here and click Retry.
+                  </p>
+                  {!isRetrying && (
+                    <Button
+                      type="button"
+                      onClick={handleRetry}
+                      disabled={isSubmitting}
+                      className="w-full bg-yellow-100 hover:bg-yellow-200 text-yellow-900 border border-yellow-400"
+                      size="sm"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <AppIcon name="RefreshCw" size={16} />
+                        Retry Login
+                      </span>
+                    </Button>
+                  )}
+                </div>
+              )}
+              {authError?.type !== 'ssl_cert' && authError?.canRetry && !isRetrying && (
                 <Button
                   type="button"
                   onClick={handleRetry}
@@ -548,15 +656,15 @@ const Login = () => {
             {authMethod === 'database' ? (
               <>
                 <Input
-                  label="Email Address"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={formData?.email}
-                  onChange={(e) => handleChange('email', e?.target?.value)}
-                  error={errors?.email}
+                  label="Username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={formData?.username}
+                  onChange={(e) => handleChange('username', e?.target?.value)}
+                  error={errors?.username}
                   required
                   disabled={isSubmitting}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
 
                 <Input
@@ -632,7 +740,140 @@ const Login = () => {
           </form>
         </div>
 
-        {/* Footer */}
+        {/* ── TEMPORARY DEBUG PANEL ── */}
+        <div className="mt-6 rounded-lg border-2 border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setDebugExpanded(p => !p)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-yellow-400/30 hover:bg-yellow-400/50 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-bold text-yellow-900 dark:text-yellow-200">
+              <AppIcon name="Bug" size={16} />
+              🐛 DEBUG PANEL (temporary)
+              {debugLog && (
+                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  debugLog?.status === 'success' ? 'bg-green-200 text-green-800' :
+                  debugLog?.status === 'pending'? 'bg-blue-200 text-blue-800' : 'bg-red-200 text-red-800'
+                }`}>
+                  {debugLog?.status?.toUpperCase()}
+                </span>
+              )}
+            </span>
+            <AppIcon name={debugExpanded ? 'ChevronUp' : 'ChevronDown'} size={16} className="text-yellow-800" />
+          </button>
+
+          {debugExpanded && (
+            <div className="p-4 space-y-4 text-xs font-mono">
+              <div>
+                <p className="font-bold text-yellow-800 dark:text-yellow-300 mb-1 uppercase tracking-wide">Environment</p>
+                <div className="bg-white dark:bg-gray-900 rounded p-3 border border-yellow-200 space-y-1">
+                  <div><span className="text-gray-500">VITE_API_BASE_URL:</span> <span className="text-blue-700 dark:text-blue-300 break-all">{import.meta.env?.VITE_API_BASE_URL || '(not set)'}</span></div>
+                  <div><span className="text-gray-500">Page protocol:</span> <span className="text-blue-700 dark:text-blue-300">{window.location?.protocol}</span></div>
+                  <div><span className="text-gray-500">Page origin:</span> <span className="text-blue-700 dark:text-blue-300">{window.location?.origin}</span></div>
+                  <div><span className="text-gray-500">Mixed-content risk:</span> <span className={window.location?.protocol === 'https:' && (import.meta.env?.VITE_API_BASE_URL || '')?.startsWith('http://') ? 'text-red-600 font-bold' : 'text-green-600'}>
+                    {window.location?.protocol === 'https:' && (import.meta.env?.VITE_API_BASE_URL || '')?.startsWith('http://') ? '⚠️ YES — HTTPS page calling HTTP API (blocked by browser)' : 'No'}
+                  </span></div>
+                </div>
+              </div>
+
+              {!debugLog && (
+                <p className="text-gray-500 italic">Submit the login form to capture debug info…</p>
+              )}
+
+              {debugLog && (
+                <>
+                  <div>
+                    <p className="font-bold text-yellow-800 dark:text-yellow-300 mb-1 uppercase tracking-wide">Request</p>
+                    <div className="bg-white dark:bg-gray-900 rounded p-3 border border-yellow-200 space-y-1">
+                      <div><span className="text-gray-500">Timestamp:</span> <span className="text-gray-800 dark:text-gray-200">{debugLog?.timestamp}</span></div>
+                      <div><span className="text-gray-500">URL:</span> <span className="text-blue-700 dark:text-blue-300 break-all">{debugLog?.loginUrl}</span></div>
+                      <div><span className="text-gray-500">Method:</span> <span className="text-purple-700 dark:text-purple-300">POST</span></div>
+                      <div><span className="text-gray-500">Payload:</span></div>
+                      <pre className="bg-gray-100 dark:bg-gray-800 rounded p-2 overflow-x-auto text-green-800 dark:text-green-300 whitespace-pre-wrap break-all">
+                        {JSON.stringify(debugLog?.requestPayload, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {debugLog?.response && (
+                    <div>
+                      <p className="font-bold text-green-700 dark:text-green-400 mb-1 uppercase tracking-wide">✅ Response Data</p>
+                      <pre className="bg-white dark:bg-gray-900 rounded p-3 border border-green-300 overflow-x-auto text-green-800 dark:text-green-300 whitespace-pre-wrap break-all">
+                        {debugLog?.response}
+                      </pre>
+                    </div>
+                  )}
+
+                  {debugLog?.error && (
+                    <div>
+                      <p className="font-bold text-red-700 dark:text-red-400 mb-1 uppercase tracking-wide">❌ Error Details</p>
+                      <div className="bg-white dark:bg-gray-900 rounded p-3 border border-red-300 space-y-1">
+                        <div><span className="text-gray-500">Type:</span> <span className="text-red-700 dark:text-red-300">{debugLog?.status}</span></div>
+                        <div><span className="text-gray-500">Name:</span> <span className="text-red-700 dark:text-red-300">{debugLog?.error?.name || '—'}</span></div>
+                        <div><span className="text-gray-500">Code:</span> <span className="text-red-700 dark:text-red-300">{debugLog?.error?.code || '—'}</span></div>
+                        <div><span className="text-gray-500">Message:</span> <span className="text-red-700 dark:text-red-300 break-all">{debugLog?.error?.message || '—'}</span></div>
+                        {debugLog?.rawError && (
+                          <>
+                            <div className="text-gray-500 mt-2">Full error object:</div>
+                            <pre className="bg-red-50 dark:bg-red-950/40 rounded p-2 overflow-x-auto text-red-800 dark:text-red-300 whitespace-pre-wrap break-all">
+                              {debugLog?.rawError}
+                            </pre>
+                          </>
+                        )}
+                        {debugLog?.error?.stack && (
+                          <>
+                            <div className="text-gray-500 mt-2">Stack trace:</div>
+                            <pre className="bg-gray-100 dark:bg-gray-800 rounded p-2 overflow-x-auto text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-all text-[10px]">
+                              {debugLog?.error?.stack}
+                            </pre>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {debugLog?.axiosDetails && (
+                    <div>
+                      <p className="font-bold text-orange-700 dark:text-orange-400 mb-1 uppercase tracking-wide">🔌 Axios / HTTP Details</p>
+                      <div className="bg-white dark:bg-gray-900 rounded p-3 border border-orange-300 space-y-1">
+                        <div><span className="text-gray-500">Config URL:</span> <span className="text-orange-700 dark:text-orange-300 break-all">{debugLog?.axiosDetails?.url || '—'}</span></div>
+                        <div><span className="text-gray-500">Base URL:</span> <span className="text-orange-700 dark:text-orange-300 break-all">{debugLog?.axiosDetails?.baseURL || '—'}</span></div>
+                        <div><span className="text-gray-500">Method:</span> <span className="text-orange-700 dark:text-orange-300">{debugLog?.axiosDetails?.method || '—'}</span></div>
+                        <div><span className="text-gray-500">Response Status:</span> <span className="text-orange-700 dark:text-orange-300">{debugLog?.axiosDetails?.responseStatus ?? '—'}</span></div>
+                        {debugLog?.axiosDetails?.responseData && (
+                          <>
+                            <div className="text-gray-500 mt-1">Response body:</div>
+                            <pre className="bg-orange-50 dark:bg-orange-950/40 rounded p-2 overflow-x-auto text-orange-800 dark:text-orange-300 whitespace-pre-wrap break-all">
+                              {debugLog?.axiosDetails?.responseData}
+                            </pre>
+                          </>
+                        )}
+                        {debugLog?.axiosDetails?.responseHeaders && (
+                          <>
+                            <div className="text-gray-500 mt-1">Response headers:</div>
+                            <pre className="bg-orange-50 dark:bg-orange-950/40 rounded p-2 overflow-x-auto text-orange-800 dark:text-orange-300 whitespace-pre-wrap break-all">
+                              {debugLog?.axiosDetails?.responseHeaders}
+                            </pre>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setDebugLog(null)}
+                    className="text-xs text-gray-500 underline hover:text-red-600"
+                  >
+                    Clear debug log
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        {/* ── END DEBUG PANEL ── */}
+
         <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
             © 2026 ComplianceHub. All rights reserved.

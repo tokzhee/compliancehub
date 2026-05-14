@@ -16,6 +16,7 @@ import Breadcrumb from '../../components/ui/Breadcrumb';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonGrid, SkeletonStatCard } from '../../components/ui/SkeletonLoader';
 import { Icon } from '@iconify/react';
+import { logActivity } from '../../services/activityService';
 
 
 const SubmissionLogScreen = () => {
@@ -118,6 +119,14 @@ const SubmissionLogScreen = () => {
 
       alert('Submission submitted for approval successfully');
 
+      // Log activity
+      logActivity(
+        user?.userId,
+        user?.organizationId,
+        'submission_submitted_for_approval',
+        `Submission #${submission?.id} submitted for approval (${selectedRegime})`
+      );
+
       // Refresh submissions
       const fetchedSubmissions = await submissionService?.getSubmissionLogs(
         user?.organizationId,
@@ -139,6 +148,14 @@ const SubmissionLogScreen = () => {
           return;
         }
         alert('Submission approved successfully');
+
+        // Log approval activity
+        logActivity(
+          user?.userId,
+          user?.organizationId,
+          'submission_approved',
+          `Submission #${submissionId} approved (${selectedRegime})`
+        );
       } else {
         const { error } = await submissionService?.rejectSubmission(submissionId, user?.userId, comments);
         if (error) {
@@ -146,6 +163,14 @@ const SubmissionLogScreen = () => {
           return;
         }
         alert('Submission rejected successfully');
+
+        // Log rejection activity
+        logActivity(
+          user?.userId,
+          user?.organizationId,
+          'submission_rejected',
+          `Submission #${submissionId} rejected (${selectedRegime})`
+        );
       }
 
       // Refresh submissions

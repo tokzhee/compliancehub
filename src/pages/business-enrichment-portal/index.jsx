@@ -16,6 +16,7 @@ import { supabase } from '../../lib/supabase';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 import AccessRestricted from '../../components/ui/AccessRestricted';
 import { SkeletonGrid } from '../../components/ui/SkeletonLoader';
+import { logActivity } from '../../services/activityService';
 
 const BusinessEnrichmentPortal = () => {
   const navigate = useNavigate();
@@ -166,6 +167,12 @@ const BusinessEnrichmentPortal = () => {
       );
       setCases(fetchedCases);
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'case_enrichment_saved',
+        'business_enrichment_portal'
+      );
       setShowEnrichModal(false);
       setSelectedCase(null);
     } catch (err) {
@@ -185,6 +192,13 @@ const BusinessEnrichmentPortal = () => {
         { ...filters, regimeType: selectedRegime }
       );
       setCases(fetchedCases);
+
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'case_marked_ready',
+        'business_enrichment_portal'
+      );
     } catch (err) {
       console.error('Error marking case ready:', err);
       alert('Failed to mark case as ready. Please try again.');

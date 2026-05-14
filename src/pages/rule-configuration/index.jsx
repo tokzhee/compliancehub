@@ -12,6 +12,7 @@ import RuleHistoryModal from './components/RuleHistoryModal';
 import RuleSimulationPanel from './components/RuleSimulationPanel';
 import ActivateRuleModal from './components/ActivateRuleModal';
 import { ruleService } from '../../services/ruleService';
+import { logActivity } from '../../services/activityService';
 
 const RuleConfiguration = () => {
   const { sidebarCollapsed, isSidebarExpanded } = useNavigationContext();
@@ -116,6 +117,12 @@ const RuleConfiguration = () => {
 
     setRules(prev => [newRule, ...prev]);
     setIsCreateModalOpen(false);
+    logActivity(
+      user?.userId,
+      user?.organizationId,
+      'rule_configuration_created',
+      'rule_configuration'
+    );
   };
 
   const handleEditRule = (rule) => {
@@ -137,6 +144,12 @@ const RuleConfiguration = () => {
           ? { ...r, status: 'inactive', isActive: false }
           : r
       )
+    );
+    logActivity(
+      user?.userId,
+      user?.organizationId,
+      'rule_configuration_activated',
+      'rule_configuration'
     );
     setIsActivateModalOpen(false);
     setSelectedRule(null);

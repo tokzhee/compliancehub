@@ -20,6 +20,7 @@ import { SkeletonGrid } from '../../components/ui/SkeletonLoader';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { useToast } from '../../contexts/ToastContext';
+import { logActivity } from '../../services/activityService';
 
 
 
@@ -117,6 +118,12 @@ const RoleManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'role_updated',
+        'role_management'
+      );
       await fetchRoles();
       setShowEditModal(false);
       setSelectedRole(null);
@@ -134,6 +141,12 @@ const RoleManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'role_permissions_updated',
+        'role_management'
+      );
       await fetchRoles();
       setShowManagePermissionsModal(false);
       setSelectedRole(null);
@@ -158,6 +171,12 @@ const RoleManagement = () => {
         return;
       }
 
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'role_created',
+        'role_management'
+      );
       await fetchRoles();
       setShowCreateModal(false);
     } catch (err) {
@@ -172,6 +191,12 @@ const RoleManagement = () => {
 
     try {
       await roleService?.deleteRole(roleId);
+      await logActivity(
+        user?.userId,
+        user?.organizationId,
+        'role_deleted',
+        'role_management'
+      );
       toast?.success('Role deleted successfully');
       setRoles(roles?.filter(role => role?.id !== roleId));
       if (selectedRole?.id === roleId) {
