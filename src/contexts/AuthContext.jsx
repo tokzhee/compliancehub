@@ -89,6 +89,12 @@ export const AuthProvider = ({ children }) => {
     const controller = new AbortController();
 
     const restoreSession = async () => {
+      // 🚫 DO NOT attempt to restore session on login page
+      if (window.location.pathname === '/login') {
+        if (isMounted) setLoading(false);
+        return;
+      }
+
       const token = tokenStorage?.getAccessToken();
       const storedUserId = tokenStorage?.getUserId();
 
@@ -212,7 +218,14 @@ export const AuthProvider = ({ children }) => {
       } catch {
         // Ignore logout API errors — always clear local state
       }
+      // Clear via tokenStorage (which should remove the same keys)
       tokenStorage?.clearTokens();
+      // Also directly remove to be absolutely sure (belt and suspenders)
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_id');
+      sessionStorage.removeItem('access_token');
+      
       setUser(null);
       setAuthMethod(null);
       setUserProfile(null);

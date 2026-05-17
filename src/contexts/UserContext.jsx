@@ -1,20 +1,37 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import apiClient from '../lib/apiClient';
+import apiClient from '../api/apiClient';   // ✅ Correct import
 import { permissionService } from '../services/permissionService';
 import { useToast } from './ToastContext';
 
 const UserContext = createContext(null);
 
 export const UserContextProvider = ({ children }) => {
-  const { userProfile, loading: authLoading, profileLoading } = useAuth();
+  const { userProfile, loading: authLoading, profileLoading, signOut } = useAuth();
   const toast = useToast();
 
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  const redirectingRef = useRef(false);
+  const isLoginPage = window.location.pathname === '/login';
+
+  // Verify apiClient
+  if (typeof apiClient?.get !== 'function') {
+    console.error('UserContext: apiClient.get is not a function');
+    if (process.env.NODE_ENV === 'development') {
+      throw new Error('apiClient is not properly configured.');
+    }
+  }
 
   useEffect(() => {
+    // 🚫 Do nothing on login page – no API calls
+    if (isLoginPage) {
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
     const controller = new AbortController();
 
@@ -42,28 +59,24 @@ export const UserContextProvider = ({ children }) => {
         const profileRoleName = userProfile?.roleName || userProfile?.role_name || null;
         const profilePermissions = Array.isArray(userProfile?.permissions) ? userProfile?.permissions : [];
 
-        // Fetch organization and branding via REST API
         let organizationName = userProfile?.organizationName || userProfile?.organization_name || 'ComplianceHub';
         let brandingConfig = null;
         if (profileOrgId) {
-          const orgResponse = await apiClient?.get(`/api/organizations/${profileOrgId}`, {
-            signal: controller?.signal
+          const orgResponse = await apiClient.get(`/api/organizations/${profileOrgId}`, {
+            signal: controller.signal
           });
           if (!isMounted) return;
           const orgData = orgResponse?.data;
           if (orgData?.name) organizationName = orgData?.name;
           if (orgData?.branding) brandingConfig = orgData?.branding;
-        } else {
-          console.warn('UserContext: No organization_id in userProfile');
         }
 
         if (!isMounted) return;
 
-        // Use roleName from profile; only fetch from API if not already available
         let roleName = profileRoleName;
         if (!roleName && profileRoleId) {
-          const roleResponse = await apiClient?.get(`/api/roles/${profileRoleId}`, {
-            signal: controller?.signal
+          const roleResponse = await apiClient.get(`/api/roles/${profileRoleId}`, {
+            signal: controller.signal
           });
           if (!isMounted) return;
           const roleData = roleResponse?.data;
@@ -74,11 +87,10 @@ export const UserContextProvider = ({ children }) => {
 
         if (!isMounted) return;
 
-        // Use permissions from profile; only fetch from API if not already available
         let permissions = profilePermissions;
         if (permissions?.length === 0 && profileRoleId) {
-          const permResponse = await apiClient?.get(`/api/roles/${profileRoleId}/permissions`, {
-            signal: controller?.signal
+          const permResponse = await apiClient.get(`/api/roles/${profileRoleId}/permissions`, {
+            signal: controller.signal
           });
           if (!isMounted) return;
           const permissionsData = permResponse?.data;
@@ -112,6 +124,24 @@ export const UserContextProvider = ({ children }) => {
         }
       } catch (error) {
         if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+        
+        // Handle 401 Unauthorized – cleanly sign out and redirect once
+        if (error.response?.status === 401 && !redirectingRef.current) {
+          redirectingRef.current = true;
+          console.warn('UserContext: 401 Unauthorized – clearing session and redirecting');
+          
+          await signOut();
+          
+          // Also clear any lingering Authorization header from apiClient
+          delete apiClient.defaults.headers.common['Authorization'];
+          
+          // Redirect to login page (only once)
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          return;
+        }
+        
         console.error('Error fetching user details:', error);
         toast?.error?.('Failed to load user details. Please refresh the page or log in again.');
         if (isMounted) {
@@ -129,7 +159,7 @@ export const UserContextProvider = ({ children }) => {
       isMounted = false;
       controller?.abort();
     };
-  }, [userProfile, authLoading, profileLoading]);
+  }, [userProfile, authLoading, profileLoading, toast, signOut, isLoginPage]);
 
   const hasPermission = (permission) => {
     if (!user?.permissions?.length) return false;
@@ -161,22 +191,18 @@ export const UserContextProvider = ({ children }) => {
 
   const refreshPermissions = async () => {
     if (!user?.roleId) {
-      console.warn('UserContext.refreshPermissions: No roleId available, skipping refresh');
+      console.warn('UserContext.refreshPermissions: No roleId available');
       return [];
     }
-
     try {
       const freshPermissions = await permissionService?.refreshUserPermissions(user?.roleId);
       if (freshPermissions?.length > 0) {
-        setUser(prev => ({
-          ...prev,
-          permissions: freshPermissions
-        }));
+        setUser(prev => ({ ...prev, permissions: freshPermissions }));
       }
       return freshPermissions;
     } catch (error) {
-      console.error('UserContext.refreshPermissions: Failed to refresh permissions:', error?.message);
-      toast?.error?.('Failed to refresh permissions. Please reload the page.');
+      console.error('Failed to refresh permissions:', error?.message);
+      toast?.error?.('Failed to refresh permissions.');
       return user?.permissions || [];
     }
   };

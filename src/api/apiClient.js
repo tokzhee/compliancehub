@@ -56,7 +56,7 @@ const processQueue = (error, token = null) => {
 const forceLogout = () => {
   tokenStorage?.clearTokens();
   window.dispatchEvent(new CustomEvent('auth:logout'));
-  window.location.href = '/login';
+  // ❌ REMOVED: window.location.href = '/login';   // UserContext handles redirect
 };
 
 apiClient?.interceptors?.response?.use(
