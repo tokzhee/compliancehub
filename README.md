@@ -104,7 +104,6 @@ npm run build
 - Powered by React and Vite
 - Styled with Tailwind CSS
 
-## 🙏 Endpoint Specs (Json Formatted)
 {
   "openapi": "3.0.1",
   "info": {
@@ -562,29 +561,6 @@ npm run build
         }
       }
     },
-    "/api/enrichment/cases/{caseId}/details": {
-      "get": {
-        "tags": [
-          "Cases"
-        ],
-        "parameters": [
-          {
-            "name": "caseId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
     "/api/dashboard/activities": {
       "get": {
         "tags": [
@@ -659,6 +635,43 @@ npm run build
         }
       }
     },
+    "/api/datasets": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reportingYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "searchTerm",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
     "/api/datasets/{batchId}": {
       "delete": {
         "tags": [
@@ -688,43 +701,6 @@ npm run build
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
-    "/api/datasets": {
-      "get": {
-        "tags": [
-          "Datasets"
-        ],
-        "parameters": [
-          {
-            "name": "organizationId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "reportingYear",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "searchTerm",
-            "in": "query",
-            "schema": {
-              "type": "string"
             }
           }
         ],
@@ -792,6 +768,43 @@ npm run build
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/datasets/summary": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reportingYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "searchTerm",
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -883,6 +896,29 @@ npm run build
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/enrichment/cases/{caseId}/details": {
+      "get": {
+        "tags": [
+          "Enrichment"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -1153,29 +1189,11 @@ npm run build
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveReportingJobRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveReportingJobRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveReportingJobRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Success"
@@ -1273,6 +1291,16 @@ npm run build
       }
     },
     "/api/resources": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
       "post": {
         "tags": [
           "Resources"
@@ -1296,16 +1324,6 @@ npm run build
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "Resources"
-        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1466,29 +1484,11 @@ npm run build
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveRuleWorkflowRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveRuleWorkflowRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveRuleWorkflowRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Success"
@@ -1621,35 +1621,6 @@ npm run build
       }
     },
     "/api/rules": {
-      "post": {
-        "tags": [
-          "Rules"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaCreateRuleSetRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaCreateRuleSetRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaCreateRuleSetRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      },
       "get": {
         "tags": [
           "Rules"
@@ -1724,6 +1695,35 @@ npm run build
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Rules"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FatcaCreateRuleSetRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FatcaCreateRuleSetRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/FatcaCreateRuleSetRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success"
@@ -1809,7 +1809,7 @@ npm run build
             }
           },
           {
-            "name": "version1",
+            "name": "v1",
             "in": "query",
             "schema": {
               "type": "integer",
@@ -1817,7 +1817,7 @@ npm run build
             }
           },
           {
-            "name": "version2",
+            "name": "v2",
             "in": "query",
             "schema": {
               "type": "integer",
@@ -1952,29 +1952,11 @@ npm run build
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaRejectRuleWorkflowRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaRejectRuleWorkflowRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaRejectRuleWorkflowRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Success"
@@ -2088,29 +2070,11 @@ npm run build
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveSegmentConfigRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveSegmentConfigRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveSegmentConfigRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Success"
@@ -2295,29 +2259,11 @@ npm run build
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveSubmissionRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveSubmissionRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/FatcaApproveSubmissionRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Success"
@@ -2564,6 +2510,26 @@ npm run build
       }
     },
     "/api/roles": {
+      "get": {
+        "tags": [
+          "Users & Roles"
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
       "post": {
         "tags": [
           "Users & Roles"
@@ -2587,26 +2553,6 @@ npm run build
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "Users & Roles"
-        ],
-        "parameters": [
-          {
-            "name": "organizationId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2903,70 +2849,6 @@ npm run build
             "nullable": true
           },
           "createdBy": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "FatcaApproveReportingJobRequest": {
-        "type": "object",
-        "properties": {
-          "jobId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "approvedBy": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "FatcaApproveRuleWorkflowRequest": {
-        "type": "object",
-        "properties": {
-          "ruleSetId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "approvedBy": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "FatcaApproveSegmentConfigRequest": {
-        "type": "object",
-        "properties": {
-          "segmentId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "approvedBy": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "FatcaApproveSubmissionRequest": {
-        "type": "object",
-        "properties": {
-          "submissionId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "approvedBy": {
             "type": "string",
             "format": "uuid",
             "nullable": true
@@ -3323,21 +3205,6 @@ npm run build
             "nullable": true
           },
           "details": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "FatcaRejectRuleWorkflowRequest": {
-        "type": "object",
-        "properties": {
-          "ruleSetId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "reason": {
             "type": "string",
             "nullable": true
           }
@@ -3764,5 +3631,4 @@ npm run build
     }
   ]
 }
-
 Built with ❤️ on Rocket.new
